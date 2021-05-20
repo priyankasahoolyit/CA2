@@ -38,20 +38,6 @@ str(covid_data)                          # Check the structure of data frame
 nrow(covid_data)                         # Count the number of rows within the covid data frame 
 
 
-
-# ------------------------------------- Raw Data Visualization -----------------------------------------------#
-
-
-Deaths<-aggregate(covid_data$total_deaths~covid_data$location,covid_data,FUN = max)
-Deaths10<-Deaths[order(-Deaths$`covid_data$total_deaths`),][1:10,]
-
-Deaths10
-
-barplot(Deaths10$`covid_data$total_deaths`,names.arg = Deaths10$`covid_data$location`,
-        main="Highest covid death cases",las=3,col="red")
-
-
-
 #-------------------------------------------- Data Preparation -----------------------------------------------#
 
 # Structure displays that there are total 84529 observations and 59 variables in the Covid dataset.
@@ -73,7 +59,7 @@ covid_data[(covid_data$location=="Oceania"),2] <- "Oceania"
 sum(is.na(covid_data$continent))
 
 
-# ---------------------------------------- Identifying the missing values------------------------------------#
+# ---------------------------------------- Identifying the missing values----------------------------------------#
 
 # Lets find out if there are any NA's in the data
 # Using na.omit() to store any full rows into new_data frame
@@ -106,6 +92,19 @@ sum(is.na(covid_data))                     # Count of `NA` is 2009585
 names(which(sapply(covid_data, anyNA)))    # Almost all the variables contains `NA`, 
 
 
+# ------------------------------------- Raw Data Visualization -----------------------------------------------#
+
+
+Deaths<-aggregate(covid_data$total_deaths~covid_data$location,covid_data,FUN = max)
+Deaths10<-Deaths[order(-Deaths$`covid_data$total_deaths`),][1:10,]
+
+Deaths10
+
+barplot(Deaths10$`covid_data$total_deaths`,names.arg = Deaths10$`covid_data$location`,
+        main="Highest covid death cases",las=3,col="red")
+
+
+
 # --------------------------------- Data Subsetting and Imputing ---------------------------------------------#
 #------------------------------------------ Data Analysis ------------------------------------------------------#
 
@@ -132,7 +131,7 @@ covid_data$new_cases
 covid_data$people_fully_vaccinated[is.na(covid_data$people_fully_vaccinated)] <- 0
 covid_data$people_fully_vaccinated
 
-#------------------------------------------------- Hypothesis Testing --------------------------------------#
+#------------------------------------------------- Hypothesis Testing ------------------------------------------#
 #----------------------------------------------  Research Question 1 ----------------------------------------#
 
 # Research Question 1: Is there any correlation between total cases and total deaths in different continents of the world.
@@ -329,6 +328,240 @@ corr1
 # hence reject H0 and accept H1
 
 detach(covid_subset)
+
+#------------------------------------------------- Predictive Modeling --------------------------------------#
+
+# Examining the relationship between total_cases and total_deaths 
+# in year 2020 and 2021 for different continents of the world.
+
+# dependent variable = total_cases
+# independent variable = total_deaths
+
+
+
+
+covid_data$total_cases[is.na(covid_data$total_cases)] <- 0
+covid_data$total_cases
+covid_data$total_deaths[is.na(covid_data$total_deaths)] <- 0
+covid_data$total_deaths
+
+covid_subset <- subset(covid_data, continent %in% c("Europe"),
+                       select = c(iso_code, location, date, total_cases, total_deaths))
+
+simple_linear_model <- lm(total_cases ~ total_deaths, data=covid_subset)
+simple_linear_model
+
+#This shows us the intercept and beta coefficient for total_deaths variable, 
+# y = mx + b
+# i.e., total_deaths = -77365.12 + 43.86 x total_cases
+# Using plot() function to visualize these equation
+
+scatter.smooth(covid_subset$total_cases, covid_subset$total_deaths,
+     xlab = "Total confirmed cases of COVID-19", 
+     ylab = "Total confirmed cases of COVID-19",
+     main = "Scatter plot showing regression line
+for total_deaths prdicted from total_cases")
+abline(simple_linear_model)
+
+
+library(ggplot2)
+plot <- ggplot(covid_subset, aes(x = total_cases, y = total_deaths))
+plot <- plot + stat_smooth(method = "lm", col = "darkgrey", regression = TRUE)
+plot <- plot + scale_color_viridis_c()
+plot <- plot + geom_point()
+print(plot)
+
+
+
+# Detailed description to understand the data using summary() function
+
+summary(simple_linear_model)
+
+
+
+confint(simple_linear_model)
+
+
+
+corr <- cor(covid_subset$total_cases, covid_subset$total_deaths)
+corr
+
+
+# Checking for Outliers
+# Generally, any data point that lies outside the **1.5 * 
+# interquartile-range (1.5 * IQR)** is considered an outlier,
+# Where:
+# IQR is calculated as the distance between the 25th percentile and 
+# 75th percentile values for that variable.
+# We’ll need to check both total_cases and total_deaths
+
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2)) # divide graph area in 2 columns
+attach(covid_subset)
+boxplot(total_cases,
+        main = "total_cases",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(total_cases)$out)) # box plot for 'total_cases'
+boxplot(total_deaths,
+        main = "total_deaths",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(total_deaths)$out)) # box plot for 'total_deaths'
+
+detach(covid_subset)
+par <- opar
+
+# The boxplots suggest that there is 1 outlier in the data 
+# in the distance variable where the speed is 120.
+
+nrow(cars)
+cars <- subset(cars, cars$dist!=120)
+nrow(cars)
+
+# Checking normality with histograms and quantilequantile plots
+# We will check normality with two different techniques so that we can exemplify the usage of a
+# technique known as the strategy pattern, which is part of a set of patterns from object oriented
+# programming.
+# We can use the e1071 library to access skewness function and show in our plot
+
+
+# Skewness function to examine normality of data
+#install.packages("e1071")
+library(e1071)
+# divide graph area in 2 columns
+par(mfrow = c(1, 2))
+# density plot for 'speed'
+plot(density(covid_subset$total_cases), main = "Density Plot: total_cases",
+     ylab = "Frequency",
+     sub = paste("Skewness:",
+                 round(e1071::skewness(covid_subset$total_cases), 2)))
+# Lets fill in the area under the density plot in red
+polygon(density(covid_subset$total_cases), col = "red")
+# Minimal skewness = -0.11 - slightly skewed to the left
+# NB - skewness <-1 or >1 = highly skewed
+# -1 to -05 and 0.5 to 1 = moderately skewed
+# -0.5 to 0-5 = approx symmetric
+
+# The plot shows minimal skewness with the data.
+# Minimal skewness = -0.11 - slightly skewed to the left. NB a skewness value <-1 or >1 = highly
+# skewed. Skewness -1 to -05 and 0.5 to 1 = moderately skewed. And skewness -0.5 to 0-5 = approx
+# symmetric.
+# No we need to repeat this for the distance variable.
+
+# density plot for 'dist'
+plot(density(covid_subset$total_deaths),
+     main = "Density Plot: total_deaths",
+     ylab = "Frequency",
+     sub = paste("Skewness:",
+                 round(e1071::skewness(covid_subset$total_deaths), 2)))
+
+polygon(density(covid_subset$total_deaths), col = "red")
+
+# We can also examine normality using the qqnorm() function and a histogram of
+
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2)) # divide graph area in 2 columns
+hist(covid_subset$total_cases, 
+     main = "Normality proportion of distance", xlab = "total_cases")
+qqnorm(covid_subset$total_cases)
+qqline(covid_subset$total_cases)
+par <- opar
+
+# As you can see, the histogram shows an approximate normal distribution of distance that is slightly
+# skewed towards the left, but we can easily accept it as being normal.
+# The corresponding quantilequantile plot shows the same information in a slightly different way. The
+# line it shows corresponds to the quantiles of the normal distribution, and the dots show the actual
+# distribution in the data. The closer these dots are to the line, the closer the variable’s distribution
+# is to being normally distributed.
+# As we can see, for the most part, distance is normally distributed, and it’s at the extremes that we
+# can see a slight deviation, which probably comes from the fact that our distance variable actually
+# has hard limits at 0 and 1. However, we can also accept it as being normally distributed, and we
+# can proceed to the next assumption safely.
+
+
+#  Training and testing datasets
+
+set.seed(1)
+no_rows_data <- nrow(covid_subset)
+sample <- sample(1:no_rows_data, size = round(0.7 * no_rows_data), 
+                 replace = FALSE)
+training_data <- covid_subset[sample, ]
+testing_data <- covid_subset[-sample, ]
+
+# Now we can build the linear model using the training data.
+
+linearMod <- lm(total_cases ~ total_deaths, data = training_data)
+
+#Before using a regression model, we have to ensure that it is statistically significant. Lets begin by
+#printing the summary statistics for it.
+
+linearMod
+
+summary(linearMod)
+
+# AIC and BIC
+
+AIC(linearMod) #425520.3
+BIC(linearMod) #425543
+
+# Predicting data using the model
+# Now we will predict distance values and see how they compare with the testing data.
+
+predicted_distance <- predict(linearMod, testing_data)
+
+# make actuals_predicted dataframe.
+actuals_predictions <- data.frame(cbind(actuals = testing_data$dist, predicted
+                                        = predicted_distance))
+head(actuals_predictions)
+
+correlation_accuracy <- cor(actuals_predictions)
+correlation_accuracy
+
+
+# Min - max accuracy
+min_max_accuracy <- mean(apply(actuals_predictions, 1, min) /apply(actuals_predictions, 1, max))
+min_max_accuracy
+
+# MAPE
+
+mape <- mean(abs((actuals_predictions$predicted - actuals_predictions$actuals))/ actuals_predictions$actuals)
+mape
+
+# k-fold
+install.packages("DAAG")
+library(DAAG)
+cvResults <- suppressWarnings(CVlm(data = cars,
+                                   form.lm = dist ~ speed,
+                                   m = 5,
+                                   dots = FALSE,
+                                   seed = 1,
+                                   legend.pos = "topleft",
+                                   printit = FALSE,
+                                   main = "Small symbols are predicted values while bigger ones are actuals."));
+
+
+
+
+df <- data.frame(speed = c(100))
+predicted_distance <- predict(linearMod, df)
+predicted_distance
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #------------------------------------------------- Research Question 2 --------------------------------------#
 
