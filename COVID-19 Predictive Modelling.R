@@ -1,4 +1,4 @@
-# ------------------------ COVID-19 Predictive Modelling ------------------------------# 
+# ----------------------------- COVID-19 Predictive Modeling ------------------------------# 
 
 # First, we created a new repository called CA2 in GitHub.
 # Then created a new project in R.
@@ -8,20 +8,32 @@
 setwd("C:\\Users\\deepa\\Documents\\R\\CA2")
 getwd()
 
-# We will load some libraries that we are going to use during the research.
+# ----------------------------------- Research Question --------------------------------# 
+
+# Prediction of new_cases in Europe by analyzing the variables 
+# like population, people_fully_vaccinated, stringency_index, handwashing_facilities, 
+# aged_70_older, diabetes_prevalence, Smokers etc. in first quarter of year 2021.
+# Further, there is also forecasting on new_deaths, seeing the trends in new_cases.
+
+# We will load some libraries that we are going to use during the study.
 install.packages("ggplot2")   # Install package for Data visualization
 install.packages("mice")      # Install mice package and displayed the missing values
 install.packages("VIM")       # Install VIM package and displayed the missing values
 install.packages("psych")     # Install psych package to find correlations between multiple variables
-install.packages("magrittr")  # Install magrittr package are only needed the first time you use it
-install.packages("dplyr")     # Install dplyr package to decrease development time and improve readability of code
-library(magrittr)             # needs to be run every time you start R and want to use %>%
-library(dplyr)                # alternatively, this also loads %>%
-library(psych)
-library(VIM)
+install.packages("gvlma")
+install.packages("leaps")
+
 library(ggplot2)
 library(mice)
+library(VIM)
+library(psych)
+library(gvlma)
+library(leaps)
+library(car)
+library(MASS)
+library(e1071)
 
+# ----------------------------------- Data Gathering --------------------------------# 
 
 # File "covid.csv" downloaded from blackboard, 
 # storing the data file into the working directory and reading it as data frame called as "covid_data".
@@ -37,14 +49,12 @@ class(covid_data)                        # Confirm the class of covid_data
 str(covid_data)                          # Check the structure of data frame
 nrow(covid_data)                         # Count the number of rows within the covid data frame 
 
-
-#-------------------------------------------- Data Preparation -----------------------------------------------#
+#----------------------------------------- Data Preparation -----------------------------------------------#
 
 # Structure displays that there are total 84529 observations and 59 variables in the Covid dataset.
 # Already all the string variables are converted to Factors while reading the data into dataframe. 
 # The `date` field is in "YYYY-mm-dd" format as char type
 # converted to a `date` variable to date from char type.
-
 covid_data$date <- as.Date(covid_data$date)
 str(covid_data$date)
 
@@ -58,66 +68,56 @@ covid_data[(covid_data$location=="South America"),2] <- "South America"
 covid_data[(covid_data$location=="Oceania"),2] <- "Oceania"
 sum(is.na(covid_data$continent))
 
-
-# ---------------------------------------- Identifying the missing values----------------------------------------#
-
-# Lets find out if there are any NA's in the data
-# Using na.omit() to store any full rows into new_data frame
-
-final_df<-na.omit(covid_data)
-dim(final_df)
-
-# It is observed that there are missing data in all the records, 
-# so na.omit() function is dropping all the rows from the data frame.
-# Hence, not an option to proceed with. 
-
-# complete.cases() returns a vector with no missing values, can be swapped by using the `!`
-# Using complete.cases() to show all complete rows store in complete_data
-# and `!` complete_cases() for missing_data accordingly.
-# Then using nrow() to show a total of all complete and missing rows
-
-complete_data <-covid_data[complete.cases(covid_data),]
-nrow(complete_data)
-missing_data <-covid_data[!complete.cases(covid_data),]
-nrow(missing_data)
-
-nrow(complete_data) - nrow(missing_data)
-# Here as well its evident that the none of the rows are complete out of 84529 observations. 
-
-
-# Now, getting the total number of `NA` values to see, how many null values were there in the entire dataset.
-# Finding which columns contain `NA` values
-
-sum(is.na(covid_data))                     # Count of `NA` is 2009585
-names(which(sapply(covid_data, anyNA)))    # Almost all the variables contains `NA`, 
-
-
-# ------------------------------------- Raw Data Visualization -----------------------------------------------#
-
-
-Deaths<-aggregate(covid_data$total_deaths~covid_data$location,covid_data,FUN = max)
-Deaths10<-Deaths[order(-Deaths$`covid_data$total_deaths`),][1:10,]
-
-Deaths10
-
-barplot(Deaths10$`covid_data$total_deaths`,names.arg = Deaths10$`covid_data$location`,
-        main="Highest covid death cases",las=3,col="red")
-
-
-
-# --------------------------------- Data Subsetting and Imputing ---------------------------------------------#
-#------------------------------------------ Data Analysis ------------------------------------------------------#
-
-# Let's create a subset of covid_data, 
-# considering the information required for further Hypothesis testing.
-
-# Using the subset function to extract all records 
-# from covid_data and only select the listed attributes for Europe
-
+#-------------------------------------- Data Wrangling, Subsetting, Imputing -----------------------------------------------#
+# As per the research question requirement, the concerned variables are selected
+# from covid_data for the continent Europe in the first 4 months of 2021 i.e. (Jan-Apr)
 
 attach(covid_data)
+names(covid_data)
+
+covid_EU <- subset(covid_data, continent %in% c("Europe") , 
+                   select = c(iso_code, location, date, 
+                              new_cases,
+                              total_cases,
+                              total_deaths,
+                              new_deaths,
+                              icu_patients,
+                              hosp_patients,
+                              new_tests,
+                              total_tests,
+                              people_fully_vaccinated,
+                              population,
+                              stringency_index,
+                              aged_70_older,
+                              diabetes_prevalence,
+                              female_smokers,
+                              male_smokers,
+                              handwashing_facilities
+                   )) 
+
+covid_EU_2021 <- subset(covid_EU, format.Date(date, "%Y") == "2021" )
+
+str(covid_EU_2021)
+head(covid_EU_2021)
+dim(covid_EU_2021)
+sum(is.na(covid_EU_2021))
+names(which(sapply(covid_EU_2021, anyNA)))    # Almost all the variables contains `NA`
+
+# Check for missing data
+incomplete_data <- covid_EU_2021[!complete.cases(covid_EU_2021),]
+nrow(covid_EU_2021)
+
+#Using mice library to display NA values and its count
+md.pattern(covid_EU_2021, plot = TRUE, rotate.names = TRUE)
+
+# Using VIM library and displayed the missing values
+missing_values <- aggr(covid_EU_2021,cex.axis=.5, prop = FALSE, numbers = TRUE)
 
 
+# show summary of the content of missing_values 
+summary(missing_values)
+
+attach(covid_EU_2021)
 # The variable `new_cases` are the counts of new confirmed cases of covid-19 reported daily, country wise. 
 # So it will not be wrong to consider the null values as no new cases in the country on particular date, 
 # hence replacing NA values with 0 for this column. 
@@ -126,89 +126,79 @@ attach(covid_data)
 # The NA cases for this variable would be considered as if a country has number of people
 # fully vaccinated is none then this column takes NA as value, can be replaced by 0 for analysis purpose.
 
-covid_data$new_cases[is.na(covid_data$new_cases)] <- 0
-covid_data$new_cases
-covid_data$people_fully_vaccinated[is.na(covid_data$people_fully_vaccinated)] <- 0
-covid_data$people_fully_vaccinated
+# Likewise, `total_cases`, `total_deaths`, `new_deaths`, `icu_patients`, `hosp_patients`,
+# `new_tests`, `total_tests`, `aged_70_older`, `stringency_index`, `diabetes_prevalence`,
+# `female_smokers`, `male_smokers`, and `handwashing_facilities` 
+# NA values, are replaced by 0 for analysis purpose.
 
-#------------------------------------------------- Hypothesis Testing ------------------------------------------#
-#----------------------------------------------  Research Question 1 ----------------------------------------#
+covid_EU_2021$total_cases[is.na(covid_EU_2021$total_cases)] <- 0
+covid_EU_2021$new_cases[is.na(covid_EU_2021$new_cases)] <- 0
+covid_EU_2021$total_deaths[is.na(covid_EU_2021$total_deaths)] <- 0
+covid_EU_2021$new_deaths[is.na(covid_EU_2021$new_deaths)] <- 0
+covid_EU_2021$people_fully_vaccinated[is.na(covid_EU_2021$people_fully_vaccinated)] <- 0
 
-# Research Question 1: Is there any correlation between total cases and total deaths in different continents of the world.
+covid_EU_2021$icu_patients[is.na(covid_EU_2021$icu_patients)] <- 0
+covid_EU_2021$hosp_patients[is.na(covid_EU_2021$hosp_patients)] <- 0
+covid_EU_2021$new_tests[is.na(covid_EU_2021$new_tests)] <- 0
+covid_EU_2021$total_tests[is.na(covid_EU_2021$total_tests)] <- 0
 
-# Null Hypothesis (H0): There is no correlation between total cases and total deaths in different continents of the world.
-# Alternate Hypothesis (H1): There is correlation between total cases and total deaths in different continents of the world.
+covid_EU_2021$aged_70_older[is.na(covid_EU_2021$aged_70_older)] <- 0
+covid_EU_2021$stringency_index[is.na(covid_EU_2021$stringency_index)] <- 0
+covid_EU_2021$diabetes_prevalence[is.na(covid_EU_2021$diabetes_prevalence)] <- 0
+covid_EU_2021$female_smokers[is.na(covid_EU_2021$female_smokers)] <- 0
+covid_EU_2021$male_smokers[is.na(covid_EU_2021$male_smokers)] <- 0
+covid_EU_2021$handwashing_facilities[is.na(covid_EU_2021$handwashing_facilities)] <- 0
 
-# Analyzing the variables used in each variable
-# total_cases = Continuous interval variable,
-# total_deaths = Continuous interval variable 
-#-----------------------------------------------------------------------------------------------------------------------------------#
 
-# use statistical methods to examine 
-# the relationship between our variables of interest
+# Calculating the actual numbers for the variables having values 
+# as share of total population provided in the data set description.
+# Share of the population that is 70 years and older
+covid_EU_2021$aged_70_older <- (covid_EU_2021$population  *  covid_EU_2021$aged_70_older)/100
+covid_EU_2021$aged_70_older <- as.integer(covid_EU_2021$aged_70_older)
 
-# creating a subset of covid_data for convenient hypothesis testing
+#Diabetes prevalence (% of population aged 20 to 79)
+covid_EU_2021$diabetes_prevalence <- (covid_EU_2021$population  *  covid_EU_2021$diabetes_prevalence)/100
+covid_EU_2021$diabetes_prevalence <- as.integer(covid_EU_2021$diabetes_prevalence)
 
-attach(covid_data)
-names(covid_data)
+# Share of the population with basic handwashing facilities on premises, most recent year available
+covid_EU_2021$handwashing_facilities <- (covid_EU_2021$population  *  covid_EU_2021$handwashing_facilities)/100
+covid_EU_2021$handwashing_facilities <- as.integer(covid_EU_2021$handwashing_facilities)
 
-covid_subset <- subset(covid_data,
-                       select = c(iso_code, location, date, total_cases, total_deaths))
-str(covid_subset)
-head(covid_subset)
-dim(covid_subset)
-sum(is.na(covid_subset))
+# Share of women who smoke, most recent year available
+covid_EU_2021$female_smokers <- (covid_EU_2021$population  *  covid_EU_2021$female_smokers)/100
+covid_EU_2021$female_smokers <- as.integer(covid_EU_2021$female_smokers)
 
-# Check for missing data
-incomplete_data <- covid_subset[!complete.cases(covid_subset),]
-nrow(incomplete_data)
+#Share of men who smoke, most recent year available
+covid_EU_2021$male_smokers <- (covid_EU_2021$population  *  covid_EU_2021$male_smokers)/100
+covid_EU_2021$male_smokers <- as.integer(covid_EU_2021$male_smokers)
 
-#Using mice library to display NA values and its count
-md.pattern(covid_subset)
+# Total number of smokers by adding the males and female smokers
+covid_EU_2021$total_smokers <- covid_EU_2021$male_smokers + covid_EU_2021$female_smokers
 
-# Using VIM library and displayed the missing values
-missing_values <- aggr(covid_subset, prop = FALSE, numbers = TRUE)
-
-# show summary of the content of missing_values 
-summary(missing_values)
+str(covid_EU_2021)
+head(covid_EU_2021)
+dim(covid_EU_2021)
+sum(is.na(covid_EU_2021))
 
 # ----------------------------------------------- Linearity check --------------------------------------------------------------#
 
-# Check whether the variables used for the hypothesis test are normally distributed or not. 
-# Doing this visually and using a relevant statistical analysis test. 
-# Then decide on which statistical test you will use.
+# Also using psych library to get correlation coefficient between the variables
+# Then using the scatter plot with the dependent variable in the y axis 
+# and an independent variable in the x axis. 
+# If the relation appears to be linear, the assumption is validated.
 
-# ChecK linearity of the variables 
+#covid_corr <- subset(covid_subset,
+#                    select = c(people_fully_vaccinated, new_cases))
 
-attach(covid_subset)
+#my_sample<-covid_corr[sample(1:nrow(covid_corr), 10000, replace = FALSE),]
+#my_sample
 
-plot(total_cases, total_deaths, pch = 9, col= "lightblue",
-     main = "Comparision of total_cases with total_deaths in various continents",
-     xlab = "Total confirmed cases of COVID-19",
-     ylab = "Total deaths attributed to COVID-19")
-
-
-options(scipen = 999)
-ggplot(covid_subset, aes(x=total_cases, y=total_deaths))+ geom_point(col="lightblue", size=3)
+#head(covid_corr)
+#dim(covid_corr) 
 
 
-# we can also examine the linear correlation between both variables using Quantile-quantile plot (Q-Q plot)
-with (covid_subset, {qqplot (total_cases, total_deaths,
-                             main = "Comparision of total_cases with total_deaths in various continents",
-                             xlab = "Total confirmed cases of COVID-19",
-                             ylab = "Total deaths attributed to COVID-19")})
-
-# Also using psych library to get correlation coefficient between the 2 variables
-covid_corr <- subset(covid_subset,
-                     select = c(total_cases, total_deaths))
-
-my_sample<-covid_corr[sample(1:nrow(covid_corr), 10000, replace = FALSE),]
-my_sample
-
-head(covid_corr)
-dim(covid_corr) 
-
-pairs.panels(my_sample,
+library(psych)
+pairs.panels(covid_EU_2021,
              smooth = TRUE, # If TRUE, draws loess smooths
              scale = FALSE, # If TRUE, scales the correlation text font    
              density = TRUE, # If TRUE, adds density plots and histograms    
@@ -223,1095 +213,950 @@ pairs.panels(my_sample,
              stars = TRUE, # If TRUE, adds significance level with stars    
              ci = TRUE) # If TRUE, adds confidence intervals   
 
-# 0.96***
+# This chart provides a general level of detail on linearity of the independent variable with the depend
+# variables.
+# It is observed that the covid-19 total cases may be bimodal and that each of the predictor variables is skewed
+# to some extent.
+# Impact on Total/New cases with population and people_fully_vaccinated, and they fall with stringency_index levels and handwashing_facilities.
+# At the same time, colder states have lower illiteracy rates and population and higher incomes.
+# We can check each one in more detail using a scatter plot. 
 
-#----------------------------  Normal Distribution --------------------#
+# Plot between the new_cases and new_deaths is really alarming. 
+# There is a strong correlation of #0.9422073
+options(scipen = 999)
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$new_deaths,
+               main = "new_cases ~ new_deaths",
+               xlab = "new_cases",
+               ylab = "new_deaths")
 
+cor(covid_EU_2021$new_cases, covid_EU_2021$new_deaths) #0.9422073
 
-# Plotting histograms to view if the variables are normally Distributed 
+# It is very important to analyze the reason for increasing new_cases and predictions to control the new_deaths.
+# Here’s the independent variable new_cases
+# plotted against the dependent variables people_fully_vaccinated
 
-#arrange the plots in 1 rows by 2 cols
-opar = par(no.readonly = TRUE)
-par(mfrow = c(1,2))
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$people_fully_vaccinated,
+               main = "new_cases ~ people_fully_vaccinated",
+               xlab = "new_cases",
+               ylab = "people_fully_vaccinated")
 
-hist(total_cases, col = "blue", main = "distribution of total_cases" , 
-     xlab = "total_cases")
-hist(total_deaths, col = "blue", main = "distribution of total_deaths",
-     xlab = "total_deaths")
+# The chart does not appear to be correlated. We can measure correlation using the cor() function.
+# Recall that a low correlation (-0.2 < x < 0.2) suggests that much of variation of the response
+# variable (Y) is unexplained by the predictor (X), in which case, we should probably look for better
+# explanatory variables.
 
-par = opar
+# Checking numerically the correlation of these variables
+# Values of -0.2 < x < 0.2 - low correlation
+cor(covid_EU_2021$new_cases, covid_EU_2021$people_fully_vaccinated) #0.6385971
 
-# Using Quantile-quantile plot (Q-Q plot) allows us to check
-# if the data is normally distributed or not 
-
-#Is total_cases normally distributed?
-with (covid_subset, {qqnorm (total_cases,
-                             main = "Normal QQ-plot of total_cases",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-# Add line that represents normal distribution
-qqline(total_cases, col = "red")
-# total_cases appears not to be normally distributed
-
-
-#Is total_deaths normally distributed?
-with (covid_subset, {qqnorm (total_deaths,
-                             main = "Normal QQ-plot of total_deaths",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-
-# Add line that represents normal distribution
-qqline(total_deaths, col = "red")
-# total_deaths appears not to be normally distributed
-
-
-# ------------------------------------------ shapiro-wilks test ---------------------------------------------------#
-# we can run the formal test of normality provided through the widely used
-# shapiro-wilks test
-
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 5000, replace = FALSE),]
-my_sample
-
-# normality test for total_cases
-normality_test <- shapiro.test(my_sample$total_cases)
-normality_test$p.value
+# Medium correlation. Value = 0.6385971.
+# The correlation test shows that the correlation between the new_cases and 
+# people_fully_vaccinated variables = 0.6385971 indicating a medium correlation.
 
 
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
+# Similarly, checking for other variables 
 
-# In this example p-value= 0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001095636
-# 0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001095636 > 0.05 (False)
-# Therefore the var total_cases is not normally distributed
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$population,
+               main = "new_cases ~ population",
+               xlab = "new_cases",
+               ylab = "population")
 
-# normality test for total_deaths
-normality_test <- shapiro.test(my_sample$total_deaths)
-normality_test$p.value
+cor(covid_EU_2021$new_cases, covid_EU_2021$population) #0.9356457
 
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value = 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000001243357
-# 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000001243357 > 0.05 (False)
-# Therefore the variable total_deaths is not normally distributed
+# High correlation. Value = 0.9356457
+# The correlation test shows that the correlation between the new_cases and 
+# population variables = 0.9356457 indicating a High correlation.
 
 
-# Need to decide a test for calulating p-value
-# Here both variables are continuous but the dependent variable is not normally distributed. 
-# Hence going for a non parametric test i.e. 
-# Spearman’s Correlation Coefficient (also use for ordinal data) 
+# Lets examine new_cases and stringency_index
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$stringency_index,
+               main = "new_cases ~ stringency_index",
+               xlab = "new_cases",
+               ylab = "stringency_index")
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$stringency_index) # -0.1706173
+
+# This variable shows a negative correlation of -0.1706173
+# It clearly shows that with the Government Response Stringency Index: 
+#composite measure based on 9 response indicators including school closures, 
+# workplace closures, and travel bans reduced the number of new cases
+
+# Similarly, examining new_cases and handwashing_facilities
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$handwashing_facilities,
+               main = "new_cases ~ handwashing_facilities",
+               xlab = "new_cases",
+               ylab = "handwashing_facilities")
+#summary(covid_EU_2021$handwashing_facilities)
+#table(covid_EU_2021$handwashing_facilities)
+cor(covid_EU_2021$new_cases, covid_EU_2021$handwashing_facilities) # -0.04546042
+
+# Similarly, examining new_cases and icu_patients
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$icu_patients,
+               main = "new_cases ~ icu_patients",
+               xlab = "new_cases",
+               ylab = "icu_patients")
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$icu_patients) # 0.1381871
+
+# Similarly, examining new_cases and hosp_patients
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$hosp_patients,
+               main = "new_cases ~ hosp_patients",
+               xlab = "new_cases",
+               ylab = "hosp_patients")
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$hosp_patients) # 0.1488507
+
+# Similarly, examining new_cases and aged_70_older
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$aged_70_older,
+               main = "new_cases ~ aged_70_older",
+               xlab = "new_cases",
+               ylab = "aged_70_older")
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$aged_70_older) # 0.1125412
+
+# Similarly, examining new_cases and diabetes_prevalence
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$diabetes_prevalence,
+               main = "new_cases ~ diabetes_prevalence",
+               xlab = "new_cases",
+               ylab = "diabetes_prevalence")
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$diabetes_prevalence) # 0.09135375
+
+# Similarly, examining new_cases and total_smokers
+scatter.smooth(x = covid_EU_2021$new_cases,
+               y = covid_EU_2021$total_smokers,
+               main = "new_cases ~ total_smokers",
+               xlab = "new_cases",
+               ylab = "total_smokers")
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$total_smokers) # 0.09356765
+
+# similarly, the correlation is checked between newcases and other variables
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$icu_patients) # 0.1381871
+cor(covid_EU_2021$new_cases, covid_EU_2021$hosp_patients) # 0.1488507
+cor(covid_EU_2021$new_cases, covid_EU_2021$new_tests) # 0.05560787
+cor(covid_EU_2021$new_cases, covid_EU_2021$total_tests) # 0.0389979
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$aged_70_older) # 0.1125412
+cor(covid_EU_2021$total_cases, covid_EU_2021$aged_70_older) # 0.13300941
+cor(covid_EU_2021$new_deaths, covid_EU_2021$aged_70_older) # 0.1312088
+cor(covid_EU_2021$total_deaths, covid_EU_2021$aged_70_older) # 0.1474991
+
+cor(covid_EU_2021$new_cases, covid_EU_2021$diabetes_prevalence) # 0.09135375
+cor(covid_EU_2021$total_cases, covid_EU_2021$diabetes_prevalence) # 0.1176815
+cor(covid_EU_2021$total_cases, covid_EU_2021$total_smokers) # 0.1241381
+
+# We can also examine all other correlations using the cor() function.
+
+paste("Correlation for new_cases and population: ", cor(covid_EU_2021$new_cases, covid_EU_2021$population))
+paste("Correlation for new_cases and people_fully_vaccinated: ", cor(covid_EU_2021$new_cases, covid_EU_2021$people_fully_vaccinated))
+paste("Correlation for new_cases and stringency_index: ", cor(covid_EU_2021$new_cases, covid_EU_2021$stringency_index))
+paste("Correlation for new_cases and handwashing_facilities: ", cor(covid_EU_2021$new_cases, covid_EU_2021$handwashing_facilities))
+
+paste("Correlation for new_cases and icu_patients: ", cor(covid_EU_2021$new_cases, covid_EU_2021$icu_patients))
+paste("Correlation for new_cases and hosp_patients: ", cor(covid_EU_2021$new_cases, covid_EU_2021$hosp_patients))
+paste("Correlation for new_cases and new_tests: ", cor(covid_EU_2021$new_cases, covid_EU_2021$new_tests))
+paste("Correlation for new_cases and total_tests: ", cor(covid_EU_2021$new_cases, covid_EU_2021$total_tests))
+paste("Correlation for new_cases and aged_70_older: ", cor(covid_EU_2021$new_cases, covid_EU_2021$aged_70_older))
+paste("Correlation for new_cases and diabetes_prevalence: ", cor(covid_EU_2021$new_cases, covid_EU_2021$diabetes_prevalence))
+paste("Correlation for new_cases and total_smokers: ", cor(covid_EU_2021$new_cases, covid_EU_2021$total_smokers))
 
 
-corr1 <- cor.test(x=covid_subset$total_cases, 
-                  y=covid_subset$total_deaths, method = 'spearman')
-corr1
+# "Correlation for new_cases and population:  0.935645664980254"
+# "Correlation for new_cases and people_fully_vaccinated:  0.63859714086781"
+# "Correlation for new_cases and stringency_index:  -0.170617307822532"
+# "Correlation for new_cases and handwashing_facilities:  -0.0454604198937569"
+# "Correlation for new_cases and icu_patients:  0.1381871"
+# "Correlation for new_cases and hosp_patients:  0.1488507"
 
-#Spearman's rank correlation rho
+# "Correlation for new_cases and new_tests:  0.0556078745519732"
+# "Correlation for new_cases and total_tests:  0.0389979033826804"
 
-#data:  covid_subset$total_cases and covid_subset$total_deaths
-#S = 2963840232128, p-value < 0.00000000000000022
-#alternative hypothesis: true rho is not equal to 0
-#sample estimates:
-#     rho 
-#0.953974 
-
-
-# Spearman's rank correlation = 0.00000000000000022
-# p-value = 0.00000000000000022
-# cut off = 0.05 
-
-# 0.00000000000000022 < 0.05  (true)
-# reject null, and accept alternative
-# hence reject H0 and accept H1
-
-detach(covid_subset)
-
-#------------------------------------------------- Predictive Modeling --------------------------------------#
-
-# Examining the relationship between total_cases and total_deaths 
-# in year 2020 and 2021 for different continents of the world.
-
-# dependent variable = total_cases
-# independent variable = total_deaths
+# "Correlation for new_cases and aged_70_older:  0.1125412"
+# "Correlation for new_cases and diabetes_prevalence:  0.09135375"
+# "Correlation for new_cases and total_smokers:  0.09356765"
 
 
+# It appears that the variable  new_tests, total_tests  has a vary low correlation with new_cases.
+# Therefore, let's remove it from the dataset. Alternatively we can choose to exclude these dependent variables when
+# we are constructing the linear model.
+
+covid_EU_2021 <- subset(covid_EU_2021, select = -c( new_tests, total_tests))
+head(covid_EU_2021)
+detach (covid_EU_2021)
+
+# ----------------------------------------------- Outliers --------------------------------------------------------------#
+
+# Checking for outliers
+# Generally, any data point that lies outside the **1.5 * interquartile-range (1.5 * IQR)** is considered
+# an outlier. Examining all variables in the dataset.
+attach(covid_EU_2021)
+dim(covid_EU_2021)
+min(covid_EU_2021$new_cases)
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2)) # divide graph area in 3 rows by 2 columns
+#par<-opar
+
+# box plot for 'new_cases'
+boxplot(new_cases,
+        main = "new_cases",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(new_cases)$out)) 
+
+# box plot for 'population'
+boxplot(population,
+        main = "population",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(population)$out))
+
+# box plot for 'people_fully_vaccinated'
+boxplot(people_fully_vaccinated,
+        main = "people_fully_vaccinated",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(people_fully_vaccinated)$out)) 
+
+# box plot for 'stringency_index'
+boxplot(stringency_index,
+        main = "stringency_index",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(stringency_index)$out)) 
+
+# Outlier rows: 0 
+
+# box plot for 'handwashing_facilities'
+boxplot(handwashing_facilities,
+        main = "handwashing_facilities",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(handwashing_facilities)$out))
 
 
-covid_data$total_cases[is.na(covid_data$total_cases)] <- 0
-covid_data$total_cases
-covid_data$total_deaths[is.na(covid_data$total_deaths)] <- 0
-covid_data$total_deaths
+# box plot for 'icu_patients'
+boxplot(icu_patients,
+        main = "icu_patients",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(icu_patients)$out)) 
 
-covid_subset <- subset(covid_data, continent %in% c("Europe"),
-                       select = c(iso_code, location, date, total_cases, total_deaths))
+# box plot for 'hosp_patients'
+boxplot(hosp_patients,
+        main = "hosp_patients",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(hosp_patients)$out))
 
-simple_linear_model <- lm(total_cases ~ total_deaths, data=covid_subset)
-simple_linear_model
-
-#This shows us the intercept and beta coefficient for total_deaths variable, 
-# y = mx + b
-# i.e., total_deaths = -77365.12 + 43.86 x total_cases
-# Using plot() function to visualize these equation
-
-scatter.smooth(covid_subset$total_cases, covid_subset$total_deaths,
-     xlab = "Total confirmed cases of COVID-19", 
-     ylab = "Total confirmed cases of COVID-19",
-     main = "Scatter plot showing regression line
-for total_deaths prdicted from total_cases")
-abline(simple_linear_model)
+# box plot for 'aged_70_older'
+boxplot(aged_70_older,
+        main = "aged_70_older",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(aged_70_older)$out))
 
 
-library(ggplot2)
-plot <- ggplot(covid_subset, aes(x = total_cases, y = total_deaths))
-plot <- plot + stat_smooth(method = "lm", col = "darkgrey", regression = TRUE)
-plot <- plot + scale_color_viridis_c()
-plot <- plot + geom_point()
-print(plot)
+# box plot for 'diabetes_prevalence'
+boxplot(diabetes_prevalence,
+        main = "diabetes_prevalence",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(diabetes_prevalence)$out)) 
+
+# box plot for 'total_smokers'
+boxplot(total_smokers,
+        main = "total_smokers",
+        sub = paste("Outlier rows: ",
+                    boxplot.stats(total_smokers)$out))
+
+str(covid_EU_2021)
+detach(covid_EU_2021)
+par(opar)
+# ------------------------------ outliers stats --------------------------------#
+# Use boxplot.stats() function to generate relevant outliers for new_cases
+outlier_values <- boxplot.stats(covid_EU_2021$new_cases)$out 
+paste("new_cases: ", paste(outlier_values, collapse=", "))
+
+# ’new_cases outliers: Too many, cannot remove all’
+
+# Repeating for other variables with identified outliers.
+
+# Use boxplot.stats() function to generate relevant outliers for people_fully_vaccinated
+outlier_values <- boxplot.stats(covid_EU_2021$people_fully_vaccinated)$out 
+paste("people_fully_vaccinated outliers: ", paste(outlier_values, collapse=", "))
+
+# people_fully_vaccinated outliers: Too many, cannot remove all’
+
+# Use boxplot.stats() function to generate relevant outliers for population
+outlier_values <- boxplot.stats(covid_EU_2021$population)$out 
+paste("population outliers: ", paste(outlier_values, collapse=", "))
+
+# population outliers: Too many, cannot remove all’
+
+# Use boxplot.stats() function to generate relevant outliers for stringency_index
+outlier_values <- boxplot.stats(covid_EU_2021$stringency_index)$out 
+paste("stringency_index outliers: ", paste(outlier_values, collapse=", "))
+
+# stringency_index outliers: 0’
+
+# Use boxplot.stats() function to generate relevant outliers for handwashing_facilities
+outlier_values <- boxplot.stats(covid_EU_2021$handwashing_facilities)$out 
+paste("handwashing_facilities outliers: ", paste(outlier_values, collapse=", "))
+
+# handwashing_facilities outliers: Too many, cannot remove all’
+
+# Use boxplot.stats() function to generate relevant outliers for icu_patients
+outlier_values <- boxplot.stats(covid_EU_2021$icu_patients)$out 
+paste("icu_patients outliers: ", paste(outlier_values, collapse=", "))
+
+# Use boxplot.stats() function to generate relevant outliers for hosp_patients
+outlier_values <- boxplot.stats(covid_EU_2021$hosp_patients)$out 
+paste("hosp_patients outliers: ", paste(outlier_values, collapse=", "))
+
+# Use boxplot.stats() function to generate relevant outliers for aged_70_older
+outlier_values <- boxplot.stats(covid_EU_2021$aged_70_older)$out 
+paste("aged_70_older outliers: ", paste(outlier_values, collapse=", "))
+
+# aged_70_older outliers: Too many, cannot remove all’
+
+# Use boxplot.stats() function to generate relevant outliers for diabetes_prevalence
+outlier_values <- boxplot.stats(covid_EU_2021$diabetes_prevalence)$out 
+paste("diabetes_prevalence outliers: ", paste(outlier_values, collapse=", "))
+
+# diabetes_prevalence outliers: Too many, cannot remove all’
+
+# Use boxplot.stats() function to generate relevant outliers for total_smokers
+outlier_values <- boxplot.stats(covid_EU_2021$total_smokers)$out 
+paste("total_smokers outliers: ", paste(outlier_values, collapse=", "))
+
+# total_smokers outliers: Too many, cannot remove all’
+
+# -------------------------- Remove Outliers -------------------------------#
+# Now remove all of these outliers using this R code.
+# Need to revisit the outliers check by using some other methods
+# Remove new_cases outliers
+#covid_EU_2021 <- subset(covid_EU_2021,
+#                       covid_EU_2021$new_cases != -74347
+#                       & covid_EU_2021$new_cases != 131033
+#                       & covid_EU_2021$new_cases != 199224
+#                       & covid_EU_2021$new_cases != 262816
+#                       & covid_EU_2021$new_cases != 269592 
+#                       & covid_EU_2021$new_cases != 274846
+#                       & covid_EU_2021$new_cases != 275691
+#                       & covid_EU_2021$new_cases != 282881
+#                       & covid_EU_2021$new_cases != 320755)
+
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$new_cases > 0
+                        & covid_EU_2021$new_cases < 4000
+)
+#summary(covid_EU_2021$new_cases)
+
+plot(density(covid_EU_2021$new_cases),
+     main = "Density plot : new_cases",
+     ylab = "Frequency", xlab = "new_cases",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$new_cases), 2)))
 
 
 
-# Detailed description to understand the data using summary() function
-
-summary(simple_linear_model)
-
-
-
-confint(simple_linear_model)
+# Remove population  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$population  < 16948445)
 
 
 
-corr <- cor(covid_subset$total_cases, covid_subset$total_deaths)
-corr
+
+# density plot for population
+plot(density(covid_EU_2021$population),
+     main = "Density plot : population",
+     ylab = "Frequency", xlab = "population",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$population), 2)))
+
+# Remove people_fully_vaccinated outliers
+
+covid_EU_20213 <- subset(covid_EU_2021, 
+                         covid_EU_2021$people_fully_vaccinated < 300000)
+#& covid_EU_2021$people_fully_vaccinated > 0)
 
 
-# Checking for Outliers
-# Generally, any data point that lies outside the **1.5 * 
-# interquartile-range (1.5 * IQR)** is considered an outlier,
-# Where:
-# IQR is calculated as the distance between the 25th percentile and 
-# 75th percentile values for that variable.
-# We’ll need to check both total_cases and total_deaths
+
+summary(covid_EU_2021$people_fully_vaccinated)
+
+# density plot for people_fully_vaccinated
+plot(density(covid_EU_20213$people_fully_vaccinated),
+     main = "Density plot : people_fully_vaccinated",
+     ylab = "Frequency", xlab = "people_fully_vaccinated",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_20213$people_fully_vaccinated), 2)))
+
+
+
+
+# Remove stringency_index  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$stringency_index  != 0
+                        & covid_EU_2021$stringency_index  != 22.22)
+
+
+# density plot for stringency_index
+plot(density(covid_EU_2021$stringency_index),
+     main = "Density plot : stringency_index",
+     ylab = "Frequency", xlab = "stringency_index",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$stringency_index), 2)))
+
+
+
+# Remove handwashing_facilities  outliers
+covid_EU_20216 <- subset(covid_EU_2021,
+                         covid_EU_2021$handwashing_facilities > 1000)
+
+str(covid_EU_2021$handwashing_facilities)
+summary(covid_EU_2021$handwashing_facilities)
+
+# density plot for handwashing_facilities
+plot(density(covid_EU_20216$handwashing_facilities ),
+     main = "Density plot : handwashing_facilities",
+     ylab = "Frequency", xlab = "handwashing_facilities",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_20216$handwashing_facilities), 2)))
+
+
+# Remove icu_patients  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$icu_patients <400)
+
+
+
+summary(covid_EU_2021$icu_patients)
+
+# density plot for icu_patients
+plot(density(covid_EU_2021$icu_patients ),
+     main = "Density plot : icu_patients",
+     ylab = "Frequency", xlab = "icu_patients",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$icu_patients), 2)))
+
+# Remove hosp_patients  outliers
+covid_EU_20218 <- subset(covid_EU_2021,
+                         covid_EU_2021$hosp_patients < 750)
+#& covid_EU_2021$hosp_patients > 0)
+
+summary(covid_EU_2021$hosp_patients)
+
+# density plot for hosp_patients
+plot(density(covid_EU_2021$hosp_patients ),
+     main = "Density plot : hosp_patients",
+     ylab = "Frequency", xlab = "hosp_patients",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$hosp_patients), 2)))
+
+
+# Remove aged_70_older  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$aged_70_older  != 13707623
+                        & covid_EU_2021$aged_70_older  != 13369404
+                        & covid_EU_2021$aged_70_older  != 9819000
+                        & covid_EU_2021$aged_70_older  != 8913035
+                        & covid_EU_2021$aged_70_older  != 8504079
+                        & covid_EU_2021$aged_70_older  != 6451692
+                        & covid_EU_2021$aged_70_older  != 4868879
+                        & covid_EU_2021$aged_70_older  != 3861110)
+
+# Remove diabetes_prevalence  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$diabetes_prevalence  != 9018749
+                        & covid_EU_2021$diabetes_prevalence  != 1873750)
+
+# Remove total_smokers  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$total_smokers  != 73029)
+
+
+# --------------------------------- Normality and Skewness check ------------------------------------------------
+
+detach(covid_EU_2021)
+attach(covid_EU_2021)
+
+dim(covid_EU_2021)
+
+# Check for normality
+# Skewness function to examine normality
+install.packages("e1071")
+
+#library(e1071)
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(1,2)) # divide graph area into 1 row x 2 cols
+#par <- opar
+
+# minimally skewed to the left
+# skewness of < -1 or > 1 = highly skewed
+# -1 to -0.5 and 0.5 to 1 = moderately skewed
+# Skewness of -0.5 to 0.5 = approx symmetrical
+
+
+# density plot for new_cases
+plot(density(covid_EU_2021$new_cases),
+     main = "Density plot : new_cases",
+     ylab = "Frequency", xlab = "new_cases",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$new_cases), 2)))
+
+# fill the area under the plot
+polygon(density(covid_EU_2021$new_cases), col = "red")
+
+# density plot for population
+plot(density(covid_EU_2021$population),
+     main = "Density plot : population",
+     ylab = "Frequency", xlab = "population",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$population), 2)))
+
+# fill the area under the plot for population
+polygon(density(covid_EU_2021$population), col = "red")
+
+# density plot for people_fully_vaccinated
+plot(density(covid_EU_2021$people_fully_vaccinated),
+     main = "Density plot : people_fully_vaccinated",
+     ylab = "Frequency", xlab = "people_fully_vaccinated",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$people_fully_vaccinated), 2)))
+
+# fill the area under the plot	 
+polygon(density(covid_EU_2021$people_fully_vaccinated), col = "red")
+
+# density plot for stringency_index
+plot(density(covid_EU_2021$stringency_index),
+     main = "Density plot : stringency_index",
+     ylab = "Frequency", xlab = "stringency_index",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$stringency_index), 2)))
+
+# fill the area under the plot
+polygon(density(covid_EU_2021$stringency_index ), col = "red")
+
+# density plot for handwashing_facilities
+plot(density(covid_EU_2021$handwashing_facilities ),
+     main = "Density plot : handwashing_facilities",
+     ylab = "Frequency", xlab = "handwashing_facilities",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$handwashing_facilities), 2)))
+
+# fill the area under the plot	 
+polygon(density(covid_EU_2021$handwashing_facilities), col = "red")
+
+# density plot for icu_patients
+plot(density(covid_EU_2021$icu_patients ),
+     main = "Density plot : icu_patients",
+     ylab = "Frequency", xlab = "icu_patients",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$icu_patients), 2)))
+
+# fill the area under the plot for icu_patients
+polygon(density(covid_EU_2021$icu_patients), col = "red")
+
+# density plot for hosp_patients
+plot(density(covid_EU_2021$hosp_patients ),
+     main = "Density plot : hosp_patients",
+     ylab = "Frequency", xlab = "hosp_patients",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$hosp_patients), 2)))
+
+# fill the area under the plot for hosp_patients	 
+polygon(density(covid_EU_2021$hosp_patients), col = "red")
+
+# density plot for aged_70_older
+plot(density(covid_EU_2021$aged_70_older ),
+     main = "Density plot : aged_70_older",
+     ylab = "Frequency", xlab = "aged_70_older",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$aged_70_older), 2)))
+
+# fill the area under the plot for aged_70_older	 
+polygon(density(covid_EU_2021$aged_70_older), col = "red")
+
+# density plot for diabetes_prevalence
+plot(density(covid_EU_2021$diabetes_prevalence ),
+     main = "Density plot : diabetes_prevalence",
+     ylab = "Frequency", xlab = "diabetes_prevalence",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$diabetes_prevalence), 2)))
+
+# fill the area under the plot for diabetes_prevalence
+polygon(density(covid_EU_2021$diabetes_prevalence), col = "red")
+
+# density plot for total_smokers
+plot(density(covid_EU_2021$total_smokers ),
+     main = "Density plot : total_smokers",
+     ylab = "Frequency", xlab = "total_smokers",
+     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$total_smokers), 2)))
+
+# fill the area under the plot for total_smokers 
+polygon(density(covid_EU_2021$total_smokers), col = "red")
+
+par <- opar
+
+# It is difficult to read all skewness values. We can display them numerically using the following code.
+
+paste("Skewness for new_cases: ", round(e1071::skewness(covid_EU_2021$new_cases), 2))
+paste("Skewness for population: ", round(e1071::skewness(covid_EU_2021$population), 2))
+paste("Skewness for people_fully_vaccinated : ", round(e1071::skewness(covid_EU_2021$people_fully_vaccinated),2))
+paste("Skewness for stringency_index)) : ", round(e1071::skewness(covid_EU_2021$stringency_index),2))
+paste("Skewness for handwashing_facilities)) : ", round(e1071::skewness(covid_EU_2021$handwashing_facilities), 2))
+
+paste("Skewness for icu_patients: ", round(e1071::skewness(covid_EU_2021$icu_patients), 2))
+paste("Skewness for hosp_patients: ", round(e1071::skewness(covid_EU_2021$hosp_patients), 2))
+paste("Skewness for aged_70_older : ", round(e1071::skewness(covid_EU_2021$aged_70_older),2))
+paste("Skewness for diabetes_prevalence)) : ", round(e1071::skewness(covid_EU_2021$diabetes_prevalence),2))
+paste("Skewness for total_smokers)) : ", round(e1071::skewness(covid_EU_2021$total_smokers), 2))
+
+# "Skewness for new_cases:  3.39"
+# "Skewness for population:  0.67"
+# "Skewness for people_fully_vaccinated :   2.88"
+# "Skewness for stringency_index)) :  -0.38"
+# "Skewness for handwashing_facilities)) :  5.29"
+# "Skewness for icu_patients:  3.21"
+# "Skewness for hosp_patients:  2.7"
+# "Skewness for aged_70_older :   0.67"
+# "Skewness for diabetes_prevalence)) :  0.81"
+# "Skewness for total_smokers)) :  0.8"
+
+# Here’s the standard metrics for skewness.
+# Minimal skewness = -0.11 - slightly skewed to the left. 
+# NB a skewness value <-1 or >1 = highly skewed. 
+# Skewness -1 to -05 and 0.5 to 1 = moderately skewed. 
+# Skewness -0.5 to 0-5 = approx symmetrical.
+
+# Now lets use a scatterplot to see if the distribution of data points could be described with a straight
+# line. Using a scatter plot with the dependent variable in the y axis and an independent variable
+# in the x axis. If the relation appears to be linear, the assumption is validated.
+# Also examine normality using the qqnorm() function and a histogram of the data for
+# distribution
+
 
 opar <- par(no.readonly = TRUE)
 par(mfrow = c(1, 2)) # divide graph area in 2 columns
-attach(covid_subset)
-boxplot(total_cases,
-        main = "total_cases",
-        sub = paste("Outlier rows: ",
-                    boxplot.stats(total_cases)$out)) # box plot for 'total_cases'
-boxplot(total_deaths,
-        main = "total_deaths",
-        sub = paste("Outlier rows: ",
-                    boxplot.stats(total_deaths)$out)) # box plot for 'total_deaths'
 
-detach(covid_subset)
+hist(covid_EU_2021$new_cases, main = "Normality proportion of new_cases", xlab = "new_cases")
+qqnorm(covid_EU_2021$new_cases)
+qqline(covid_EU_2021$new_cases)
 par <- opar
 
-# The boxplots suggest that there is 1 outlier in the data 
-# in the distance variable where the speed is 120.
+attach(covid_EU_2021)
 
-nrow(cars)
-cars <- subset(cars, cars$dist!=120)
-nrow(cars)
-
-# Checking normality with histograms and quantilequantile plots
-# We will check normality with two different techniques so that we can exemplify the usage of a
-# technique known as the strategy pattern, which is part of a set of patterns from object oriented
-# programming.
-# We can use the e1071 library to access skewness function and show in our plot
-
-
-# Skewness function to examine normality of data
-#install.packages("e1071")
-library(e1071)
-# divide graph area in 2 columns
-par(mfrow = c(1, 2))
-# density plot for 'speed'
-plot(density(covid_subset$total_cases), main = "Density Plot: total_cases",
-     ylab = "Frequency",
-     sub = paste("Skewness:",
-                 round(e1071::skewness(covid_subset$total_cases), 2)))
-# Lets fill in the area under the density plot in red
-polygon(density(covid_subset$total_cases), col = "red")
-# Minimal skewness = -0.11 - slightly skewed to the left
-# NB - skewness <-1 or >1 = highly skewed
-# -1 to -05 and 0.5 to 1 = moderately skewed
-# -0.5 to 0-5 = approx symmetric
-
-# The plot shows minimal skewness with the data.
-# Minimal skewness = -0.11 - slightly skewed to the left. NB a skewness value <-1 or >1 = highly
-# skewed. Skewness -1 to -05 and 0.5 to 1 = moderately skewed. And skewness -0.5 to 0-5 = approx
-# symmetric.
-# No we need to repeat this for the distance variable.
-
-# density plot for 'dist'
-plot(density(covid_subset$total_deaths),
-     main = "Density Plot: total_deaths",
-     ylab = "Frequency",
-     sub = paste("Skewness:",
-                 round(e1071::skewness(covid_subset$total_deaths), 2)))
-
-polygon(density(covid_subset$total_deaths), col = "red")
-
-# We can also examine normality using the qqnorm() function and a histogram of
-
-opar <- par(no.readonly = TRUE)
-par(mfrow = c(1, 2)) # divide graph area in 2 columns
-hist(covid_subset$total_cases, 
-     main = "Normality proportion of distance", xlab = "total_cases")
-qqnorm(covid_subset$total_cases)
-qqline(covid_subset$total_cases)
-par <- opar
-
-# As you can see, the histogram shows an approximate normal distribution of distance that is slightly
-# skewed towards the left, but we can easily accept it as being normal.
-# The corresponding quantilequantile plot shows the same information in a slightly different way. The
-# line it shows corresponds to the quantiles of the normal distribution, and the dots show the actual
-# distribution in the data. The closer these dots are to the line, the closer the variable’s distribution
-# is to being normally distributed.
-# As we can see, for the most part, distance is normally distributed, and it’s at the extremes that we
-# can see a slight deviation, which probably comes from the fact that our distance variable actually
-# has hard limits at 0 and 1. However, we can also accept it as being normally distributed, and we
-# can proceed to the next assumption safely.
-
-
-#  Training and testing datasets
-
+#Training and testing datasets
 set.seed(1)
-no_rows_data <- nrow(covid_subset)
-sample <- sample(1:no_rows_data, size = round(0.7 * no_rows_data), 
-                 replace = FALSE)
-training_data <- covid_subset[sample, ]
-testing_data <- covid_subset[-sample, ]
+no_rows_data <- nrow(covid_EU_2021)
+sample <- sample(1:no_rows_data, size = round(0.7 * no_rows_data), replace = FALSE)
+training_data <- covid_EU_2021[sample, ]
+testing_data <- covid_EU_2021[-sample, ]
 
-# Now we can build the linear model using the training data.
 
-linearMod <- lm(total_cases ~ total_deaths, data = training_data)
+# Now that the data variables are examined, so build the multiple regresion model.
+# Building the MLR model
 
-#Before using a regression model, we have to ensure that it is statistically significant. Lets begin by
-#printing the summary statistics for it.
+fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + handwashing_facilities +
+                  icu_patients + hosp_patients + aged_70_older + diabetes_prevalence +
+                  total_smokers, data=training_data)
 
-linearMod
 
-summary(linearMod)
+# Lets have a look at the the results in detail, we use the summary() function on the model object:
+# 
+
+summary(fit)
 
 # AIC and BIC
+AIC(fit) #44442.59
+BIC(fit) #44500.84
 
-AIC(linearMod) #425520.3
-BIC(linearMod) #425543
+# Model summary
+confint(fit)
 
-# Predicting data using the model
-# Now we will predict distance values and see how they compare with the testing data.
+#-------------------------------- Regression diagnostics -----------------------------#
+# Normality and studentized residuals
+# use methods available through the car package to do this analysis.
+str(covid_EU_2021)
+#library(car)
+qqPlot(fit, labels=row.names(location), id.method="identify", 
+       simulate=TRUE, main="Q-Q Plot")
 
-predicted_distance <- predict(linearMod, testing_data)
+#73581 73672  
+#  593  1611 
+
+training_data[593,]
+training_data[1611,]
+
+# The fitted() function extracts fitted values from objects returned by modeling functions. 
+# It returns the predicted new cases rate for a particular state.
+
+fitted(fit)[593]  #73581  4070.025  
+fitted(fit)[1611]  #73672  3650.808 
+
+dim(covid_EU_2021)
+# Remove diabetes_prevalence  outliers
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$location != "Sweden"
+                        & covid_EU_2021$date != "2021-01-05")
+covid_EU_2021 <- subset(covid_EU_2021,
+                        covid_EU_2021$location != "Sweden"
+                        & covid_EU_2021$date != "2021-04-06")
+
+#Split the data into Training and testing datasets
+set.seed(1)
+no_rows_data <- nrow(covid_EU_2021)
+sample <- sample(1:no_rows_data, size = round(0.7 * no_rows_data), replace = FALSE)
+training_data <- covid_EU_2021[sample, ]
+testing_data <- covid_EU_2021[-sample, ]
+
+#Then rebuild the MLR model again
+fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + handwashing_facilities +
+                  icu_patients + hosp_patients + aged_70_older + diabetes_prevalence +
+                  total_smokers, data=training_data)
+outlierTest(fit)
+
+#We can view these errors using a histogram. This code generates a histogram of the studentized
+#residuals and superimposes a normal curve, kernel-density curve, and rug plot.
+
+student_fit <- rstudent(fit)
+hist(student_fit,
+     breaks=10,
+     freq=FALSE,
+     xlab="Studentized Residual",
+     main="Distribution of Errors")
+rug(jitter(student_fit), col="brown")
+curve(dnorm(x, mean=mean(student_fit), sd=sd(student_fit)), add=TRUE,col="blue", lwd=2)
+lines(density(student_fit)$x, density(student_fit)$y, col="red", lwd=2, lty=2)
+legend("topright", legend = c( "Normal Curve", "Kernel Density Curve"), lty=1:2, col=c("blue","red"), cex=.7)
+
+# The car package also provides a statistical test for outliers. The outlierTest() function reports
+# the Bonferroni adjusted p-value for the largest absolute studentized residual:
+
+
+#Linearity
+crPlots(fit)
+
+# Influential observations
+
+cutoff <- 4/(nrow(training_data) - length(fit$coefficients) - 2)
+plot(fit, which = 4, cook.levels = cutoff)
+abline(h = cutoff, lty = 2, col = "red")
+
+#library(car)
+avPlots(fit, ask=FALSE)
+
+
+# Influence plot
+
+#library(car)
+influencePlot(fit, main="Influence Plot",
+              sub="Circle size is proportional to Cook's distance")
+
+# Homoscedasticity
+ncvTest(fit)
+
+# Non-constant Variance Score Test 
+# Variance formula: ~ fitted.values 
+# Chisquare = 4186.282, Df = 1, p = < 2.22e-16
+
+# The score test is nonsignificant (p = 0.45229), suggesting that we’ve met the constant variance
+# assumption. If the p value is significant (p < 0.05), we would assume that the error variance
+# changes with the level of the fitted values.
+
+spreadLevelPlot(fit)
+
+# Suggested power transformation:  0.07075301 
+# Warning message:
+#        In spreadLevelPlot.lm(fit) : 
+#        726 negative fitted values removed
+
+
+# Global validation of linear model assumption
+
+#library(gvlma)
+gvmodel <- gvlma(fit)
+summary(gvmodel)
+
+
+# Multicollinearity
+
+#library(car)
+vif(fit)
+
+#people_fully_vaccinated              population        stringency_index 
+#1.993006                2.100581                1.256987 
+#handwashing_facilities            icu_patients           hosp_patients 
+#1.062101                3.509519                2.636406 
+#aged_70_older     diabetes_prevalence           total_smokers 
+#23.737084               39.695411               19.063749 
+
+
+# We can check whether any of the variables indicate a multicollinearity problem
+# if the value > 2
+sqrt(vif(fit)) > 2
+
+#people_fully_vaccinated              population        stringency_index 
+#FALSE                   FALSE                   FALSE 
+#handwashing_facilities            icu_patients           hosp_patients 
+#FALSE                   FALSE                   FALSE 
+#aged_70_older     diabetes_prevalence           total_smokers 
+#TRUE                    TRUE                    TRUE 
+
+# Transforming variables
+
+#library(car)
+summary(powerTransform(training_data$new_cases))
+summary(powerTransform(training_data$population))
+
+#fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + handwashing_facilities, data=training_data)
+
+# Comparing models using AIC
+
+#Transform Murder varaible as indicated by spreadLevelPlot() function
+sqrt_transform_new_cases <- sqrt(training_data$new_cases)
+training_data$new_cases_sqrt <- sqrt_transform_new_cases
+training_data$new_cases_sqrt
+
+fit_model1 <- lm(new_cases ~ people_fully_vaccinated + population + 
+                         stringency_index + handwashing_facilities + 
+                         icu_patients + hosp_patients + aged_70_older +  
+                         diabetes_prevalence + total_smokers, data=training_data)
+fit_model2 <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
+                         stringency_index + handwashing_facilities + 
+                         icu_patients + hosp_patients + aged_70_older +  
+                         diabetes_prevalence + total_smokers, data=training_data)
+AIC(fit_model1,fit_model2)
+
+
+spreadLevelPlot(fit_model1) # Suggested power transformation:  0.3712377
+spreadLevelPlot(fit_model2) # Suggested power transformation:  0.6918342 
+
+
+# Comparing multiple models
+# STEPWISE REGRESSION
+
+#library(MASS)
+fit_test <- lm(new_cases ~ people_fully_vaccinated + population + 
+                       stringency_index + handwashing_facilities + 
+                       icu_patients + hosp_patients + aged_70_older +  
+                       diabetes_prevalence + total_smokers, data=training_data)
+stepAIC(fit_test, direction="backward")
+
+
+#library(leaps)
+leaps <-regsubsets(new_cases ~ people_fully_vaccinated + population + 
+                           stringency_index + handwashing_facilities + 
+                           icu_patients + hosp_patients + aged_70_older +  
+                           diabetes_prevalence + total_smokers, data=training_data, nbest=4)
+plot(leaps, scale="adjr2")
+
+
+#library(MASS)
+fit_test <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
+                       stringency_index + handwashing_facilities + 
+                       icu_patients + hosp_patients + aged_70_older +  
+                       diabetes_prevalence + total_smokers, data=training_data)
+stepAIC(fit_test, direction="backward")
+
+
+#library(leaps)
+leaps <-regsubsets(new_cases_sqrt ~ people_fully_vaccinated + population + 
+                           stringency_index + handwashing_facilities + 
+                           icu_patients + hosp_patients + aged_70_older +  
+                           diabetes_prevalence + total_smokers, data=training_data, nbest=4)
+plot(leaps, scale="adjr2")
+
+
+# Lets examine predicted accuracy.
+
+fit_model <- lm(new_cases ~ people_fully_vaccinated + population + 
+                        stringency_index + handwashing_facilities + 
+                        icu_patients + hosp_patients + aged_70_older +  
+                        diabetes_prevalence + total_smokers, data=training_data)
+
+fit_model_sqrt <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
+                             stringency_index + handwashing_facilities + 
+                             icu_patients + hosp_patients + aged_70_older +  
+                             diabetes_prevalence + total_smokers, data=training_data)
+
+predicted_new_cases <- predict(fit_model, testing_data)
+predicted_new_cases_sqrt <- predict(fit_model_sqrt, testing_data)
+converted_new_cases_sqrt <- predicted_new_cases_sqrt ^2
+converted_new_cases_sqrt
+
 
 # make actuals_predicted dataframe.
-actuals_predictions <- data.frame(cbind(actuals = testing_data$dist, predicted
-                                        = predicted_distance))
+actuals_predictions <- data.frame(cbind(actuals = testing_data$new_cases, predicted = predicted_new_cases))
 head(actuals_predictions)
+
+# make actuals_predicted dataframe for sqrt(Murder)
+actuals_predictions_sqrt <- data.frame(cbind(actuals = testing_data$new_cases, predicted = converted_new_cases_sqrt))
+head(actuals_predictions_sqrt)
 
 correlation_accuracy <- cor(actuals_predictions)
 correlation_accuracy
+#actuals predicted
+#actuals   1.000000  0.796065
+#predicted 0.796065  1.000000
+
+correlation_accuracy <- cor(actuals_predictions_sqrt)
+correlation_accuracy
+#actuals predicted
+#actuals   1.0000000 0.8095174
+#predicted 0.8095174 1.0000000
 
 
 # Min - max accuracy
-min_max_accuracy <- mean(apply(actuals_predictions, 1, min) /apply(actuals_predictions, 1, max))
+min_max_accuracy <- mean(apply(actuals_predictions, 1, min) / apply(actuals_predictions, 1, max))
 min_max_accuracy
 
-# MAPE
+# 0.4590679
 
-mape <- mean(abs((actuals_predictions$predicted - actuals_predictions$actuals))/ actuals_predictions$actuals)
-mape
+# Min - max accuracy
+min_max_accuracy <- mean(apply(actuals_predictions_sqrt, 1, min) / apply(actuals_predictions_sqrt, 1, max))
+min_max_accuracy
 
-# k-fold
-install.packages("DAAG")
-library(DAAG)
-cvResults <- suppressWarnings(CVlm(data = cars,
-                                   form.lm = dist ~ speed,
-                                   m = 5,
-                                   dots = FALSE,
-                                   seed = 1,
-                                   legend.pos = "topleft",
-                                   printit = FALSE,
-                                   main = "Small symbols are predicted values while bigger ones are actuals."));
+# 0.5001728
 
+# Residual Standard Error (RSE), or sigma
 
+sigma(fit_model)/ mean(testing_data$new_cases)
+# 0.8842141
 
 
-df <- data.frame(speed = c(100))
-predicted_distance <- predict(linearMod, df)
-predicted_distance
+sigma(fit_model_sqrt)/ mean(testing_data$new_cases)
+# 0.008234087
+# This estimates an error rate of 4% with the data we have at hand.
 
+# Run some output with the final model
+detach (covid_EU_2021)
+summary(covid_EU_2021)
+attach (covid_EU_2021)
 
+df <- data.frame(people_fully_vaccinated = c(695854), population = c(29406628), 
+                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
+                 icu_patients = c(361.9), hosp_patients = c(2497),
+                 aged_70_older = c(1806649), diabetes_prevalence = c(912165),
+                 total_smokers = c(9055349))
+predicted_new_cases <- predict(fit_model, df)
+predicted_new_cases
 
+# 8783.776 
 
+df <- data.frame(people_fully_vaccinated = c(695854), population = c(29406628), 
+                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
+                 icu_patients = c(361.9), hosp_patients = c(2497),
+                 aged_70_older = c(1806649), diabetes_prevalence = c(912165),
+                 total_smokers = c(9055349))
+predicted_new_cases <- predict(fit_model_sqrt, df)
+predicted_new_cases
 
+# 140.0911 
 
+df <- data.frame(people_fully_vaccinated = c(695854), population = c(29406628), 
+                 stringency_index = c(52.42), handwashing_facilities = c(261640),
+                 icu_patients = c(361.9), hosp_patients = c(2497),
+                 aged_70_older = c(1806649), diabetes_prevalence = c(912165),
+                 total_smokers = c(9055349))
+predicted_new_cases <- predict(fit_model, df)
+predicted_new_cases
 
+# 8495.424
 
 
+df <- data.frame(people_fully_vaccinated = c(695854), population = c(29406628), 
+                 stringency_index = c(52.42), handwashing_facilities = c(261640),
+                 icu_patients = c(361.9), hosp_patients = c(2497),
+                 aged_70_older = c(1806649), diabetes_prevalence = c(912165),
+                 total_smokers = c(9055349))
+predicted_new_cases <- predict(fit_model_sqrt, df)
+predicted_new_cases
 
-
-
-
-
-
-
-
-
-
-#------------------------------------------------- Research Question 2 --------------------------------------#
-
-# Research Question 2: Is there any correlation between people_fully_vaccinated and new_cases in Europe?
-# H0 : There is no correlation between people_fully_vaccinated and new_cases in Europe.
-# H1 : There is correlation between people_fully_vaccinated and new_cases in Europe.
-
-# Analyzing the variables used in null and alternate hypothesis
-# people_fully_vaccinated = continuous interval variable
-# new_cases = continuous interval variable
-
-detach(covid_subset)
-
-#-----------------------------------------------------------------------------------------------------------#
-
-# creating a subset of covid_data for convenient hypothesis testing
-
-attach(covid_data)
-names(covid_data)
-
-covid_subset <- subset(covid_data, continent %in% c("Europe"),
-                       select = c(iso_code, location, date, people_fully_vaccinated, new_cases))
-str(covid_subset)
-head(covid_subset)
-dim(covid_subset)
-sum(is.na(covid_subset))
-
-# Check for missing data
-incomplete_data <- covid_subset[!complete.cases(covid_subset),]
-nrow(incomplete_data)
-
-#Using mice library to display NA values and its count
-md.pattern(covid_subset)
-
-# Using VIM library and displayed the missing values
-missing_values <- aggr(covid_subset, prop = FALSE, numbers = TRUE)
-
-# show summary of the content of missing_values 
-summary(missing_values)
-
-# ----------------------------------------------- Linearity check --------------------------------------------------------------#
-
-# Check whether the variables used for the hypothesis test are normally distributed or not. 
-# Doing this visually and using a relevant statistical analysis test. 
-# Then decide on which statistical test you will use.
-
-# ChecK linearity of the variables 
-
-attach(covid_subset)
-
-plot(people_fully_vaccinated, new_cases, pch = 9, col= "lightblue",
-     main = "Comparision of people_fully_vaccinated with new_cases",
-     xlab = "People_fully_vaccinated in Europe",
-     ylab = "New_cases in Europe")
-
-
-options(scipen = 999)
-ggplot(covid_subset, aes(x=people_fully_vaccinated,y=new_cases))+ geom_point(col="lightblue", size=3)
-
-# we can also examine the linear correlation between both variables using Quantile-quantile plot (Q-Q plot)
-with (covid_subset, {qqplot (total_cases, total_deaths,
-                             main = "Comparision of people_fully_vaccinated with new_cases",
-                             xlab = "People_fully_vaccinated in Europe",
-                             ylab = "New_cases in Europe")})
-
-# Also using psych library to get correlation coefficient between the 2 variables
-covid_corr <- subset(covid_subset,
-                     select = c(people_fully_vaccinated, new_cases))
-
-my_sample<-covid_corr[sample(1:nrow(covid_corr), 10000, replace = FALSE),]
-my_sample
-
-head(covid_corr)
-dim(covid_corr) 
-
-pairs.panels(my_sample,
-             smooth = TRUE, # If TRUE, draws loess smooths
-             scale = FALSE, # If TRUE, scales the correlation text font    
-             density = TRUE, # If TRUE, adds density plots and histograms    
-             ellipses = TRUE, # If TRUE, draws ellipses    
-             method = "spearman",# Correlation method (also "pearson" or "kendall")    
-             pch = 21, # pch symbol    
-             lm = FALSE, # If TRUE, plots linear fit rather than the LOESS (smoothed) fit    
-             cor = TRUE, # If TRUE, reports correlations    
-             jiggle = FALSE, # If TRUE, data points are jittered    
-             factor = 2, # Jittering factor    
-             hist.col = 4, # Histograms color    
-             stars = TRUE, # If TRUE, adds significance level with stars    
-             ci = TRUE) # If TRUE, adds confidence intervals   
-
-# 0.96***
-
-#----------------------------  Normal Distribution --------------------#
-
-
-# plotting histograms to view if the variables are normally Distributed 
-
-#arrange the plots in 1 rows by 2 cols
-opar = par(no.readonly = TRUE)
-par(mfrow = c(1,2))
-
-hist(people_fully_vaccinated, col = "blue", main = "Distribution of people_fully_vaccinated" ,
-     xlab = "people_fully_vaccinated in Europe")
-hist(new_cases, col = "blue", main = "Distribution of new_cases in Europe",
-     , xlab = "new_cases in Europe")
-
-par = opar
-
-
-# Using Quantile-quantile plot (Q-Q plot) allows us to check
-# if the data is normally distributed or not 
-
-#Is people_fully_vaccinated normally distributed?
-with (covid_subset, {qqnorm (people_fully_vaccinated,
-                             main = "Normal QQ-plot of people_fully_vaccinated in Europe",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-
-# Add line that represents normal distribution
-qqline(people_fully_vaccinated, col = "red")
-# people_fully_vaccinated appears not to be normally distributed
-
-
-#Is new_cases normally distributed?
-with (covid_subset, {qqnorm (new_cases,
-                             main = "Normal QQ-plot of new_cases in Europe",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-
-# Add line that represents normal distribution
-qqline(new_cases, col = "red")
-# new_cases appears not to be normally distributed
-
-
-# ----------------------------------------------- shapiro-wilks test ---------------------------------------------------#
-# we can run the formal test of normality provided through the widely used
-# shapiro-wilks test
-
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 10000, replace = FALSE),]
-my_sample
-
-# normality test for people_fully_vaccinated
-normality_test <- shapiro.test(my_sample$people_fully_vaccinated)
-normality_test$p.value
-
-#
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value = 0.0000000000000000000000000000000000000000000000000000000000002180336
-# 0.0000000000000000000000000000000000000000000000000000000000002180336 > 0.05 (False)
-# Therefore the variable people_fully_vaccinated is not normally distributed
-
-# normality test for new_cases
-
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 5000, replace = FALSE),]
-my_sample
-
-normality_test <- shapiro.test(my_sample$new_cases)
-normality_test$p.value
-
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value = 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006308943
-# 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006308943 > 0.05 (False)
-# Therefore the variable new_cases is not normally distributed
-
-
-# Need to decide a test for calulating p-value
-# Here both variables are continuous but the dependent variable is not normally distributed. 
-# Hence going for a non parametric test i.e. 
-# Spearman’s Correlation Coefficient (also use for ordinal data) 
-
-
-corr1 <- cor.test(x=covid_subset$people_fully_vaccinated, 
-                  y=covid_subset$new_cases, method = 'spearman')
-corr1
-
-#Spearman's rank correlation rho
-
-#data:  covid_subset$people_fully_vaccinated and covid_subset$new_cases
-#S = 1853690090, p-value < 0.00000000000000022
-#alternative hypothesis: true rho is not equal to 0
-#sample estimates:
-#      rho 
-#0.5876566  
-
-# Spearman's rank correlation = 0.00000000000000022
-# p-value = 0.00000000000000022
-# cut off = 0.05 
-
-# 0.00000000000000022 < 0.05  (true)
-# reject null, and accept alternative
-# hence reject H0 and accept H1
-
-detach(covid_subset)
-
-
-
-#----------------------------------------- Research Question 3 ----------------------------------------------#
-# Research Question 3: Does hand-washing facilities affect new cases numbers in America?
-
-# H0: The hand-washing facilities does not affect new cases numbers in America
-# H1: The hand-washing facilities affect new cases numbers in America
-
-# Analyzing the variables used in each variable
-# handwashing_facilities = categorical variable, represented as proportions
-# new_cases = continuous interval variable
-
-#--------------------------------------------------------------------------------------------------------------#
-
-
-# Using statistical methods to examine the relationship between our variables of interest
-# creating a subset of covid_data for convenient hypothesis testing
-
-attach(covid_data)
-names(covid_data)
-
-covid_subset <- subset(covid_data, continent %in% c("South America", "North America"),
-                       select = c(iso_code, location, date, handwashing_facilities, new_cases))
-str(covid_subset)
-head(covid_subset)
-dim(covid_subset)
-sum(is.na(covid_subset))
-
-# Check for missing data
-incomplete_data <- covid_subset[!complete.cases(covid_subset),]
-nrow(incomplete_data)
-
-#Using mice library to display NA values and its count
-md.pattern(covid_subset)
-
-# Using VIM library and displayed the missing values
-missing_values <- aggr(covid_subset, prop = FALSE, numbers = TRUE)
-
-# show summary of the content of missing_values 
-summary(missing_values)
-
-# ----------------------------------------------- Linearity check --------------------------------------------------------------#
-
-# Check whether the variables used for the hypothesis test are normally distributed or not. 
-# Doing this visually and using a relevant statistical analysis test. 
-# Then decide on which statistical test you will use.
-
-# ChecK linearity of the variables 
-
-attach(covid_subset)
-
-plot(handwashing_facilities, new_cases, pch = 9, col= "lightblue",
-     main = "Comparision of handwashing_facilities with new_cases in America",
-     xlab = "handwashing_facilities",
-     ylab = "new_cases")
-
-
-options(scipen = 999)
-ggplot(covid_subset, aes(x=total_deaths,y=diabetes_prevalence))+ geom_point(col="lightblue", size=3)
-
-
-# we can also examine the linear correlation between both variables using Quantile-quantile plot (Q-Q plot)
-with (covid_subset, {qqplot (handwashing_facilities, new_cases,
-                             main = "Comparing handwashing_facilities and new_cases in America",
-                             xlab = "handwashing_facilities",
-                             ylab = "new_cases")})
-
-# Also using psych library to get correlation coefficient between the 2 variables
-covid_corr <- subset(covid_subset,
-                     select = c(handwashing_facilities, new_cases))
-head(covid_corr)
-dim(covid_corr)
-
-pairs.panels(covid_corr,
-             smooth = TRUE, # If TRUE, draws loess smooths
-             scale = FALSE, # If TRUE, scales the correlation text font    
-             density = TRUE, # If TRUE, adds density plots and histograms    
-             ellipses = TRUE, # If TRUE, draws ellipses    
-             method = "spearman",# Correlation method (also "pearson" or "kendall")    
-             pch = 21, # pch symbol    
-             lm = FALSE, # If TRUE, plots linear fit rather than the LOESS (smoothed) fit    
-             cor = TRUE, # If TRUE, reports correlations    
-             jiggle = FALSE, # If TRUE, data points are jittered    
-             factor = 2, # Jittering factor    
-             hist.col = 4, # Histograms color    
-             stars = TRUE, # If TRUE, adds significance level with stars    
-             ci = TRUE) # If TRUE, adds confidence intervals   
-# -0.21***
-
-
-#----------------------------  Normal Distribution --------------------------#
-# plotting histograms to view if the variables are normally Distributed 
-
-#arrange the plots in 1 rows by 2 cols
-opar = par(no.readonly = TRUE)
-par(mfrow = c(1,2))
-
-
-hist(total_deaths, col = "blue", main = "distribution of handwashing_facilities" , 
-     xlab = "handwashing_facilities in America")
-hist(new_cases, col = "blue", main = "distribution of new_cases",
-     xlab = "new_cases in America")
-
-par = opar
-
-# Using Quantile-quantile plot (Q-Q plot) allows us to check
-# if the data is normally distributed or not 
-
-#Is handwashing_facilities normally distributed?
-with (covid_subset, {qqnorm (handwashing_facilities,
-                             main = "Normal QQ-plot of handwashing_facilities in America",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-# Add line that represents normal distribution
-qqline(handwashing_facilities, col = "red")
-# handwashing_facilities appears not to be normally distributed
-
-
-#Is new_cases normally distributed?
-with (covid_subset, {qqnorm (new_cases,
-                             main = "Normal QQ-plot of new_cases in America",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-
-# Add line that represents normal distribution
-qqline(new_cases, col = "red")
-# new_cases appears not to be normally distributed
-
-
-# ------------------------------------------ shapiro-wilks test ---------------------------------------------------#
-# we can run the formal test of normality provided through the widely used
-# shapiro-wilks test
-
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 10000, replace = FALSE),]
-my_sample
-
-# normality test for people_fully_vaccinated
-normality_test <- shapiro.test(my_sample$handwashing_facilities )
-normality_test$p.value
-
-# p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value = 0.00000000000000000000000000000000000000000000000000000000000000001628196
-# 0.00000000000000000000000000000000000000000000000000000000000000001628196 > 0.05 (False)
-# Therefore the variable handwashing_facilities is not normally distributed
-
-# normality test for new_cases
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 5000, replace = FALSE),]
-my_sample
-
-normality_test <- shapiro.test(my_sample$new_cases)
-normality_test$p.value
-
-# p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value = 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000002331127
-# 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000002331127 > 0.05 (False)
-# Therefore the variable new_cases is not normally distributed
-
-
-# Need to decide a test for calulating p-value
-# Here, one variable is continuous and other is categorical.
-# The dependent variable is not normally distributed. 
-# Hence going for a non parametric test i.e. 
-# Mann-Whitney test 
-
-wilcox.test(handwashing_facilities, new_cases, paired = TRUE)  # not working
-
-
-# Wilcoxon signed rank test with continuity correction
-
-#data:  handwashing_facilities and new_cases
-#V = 245188587, p-value < 0.00000000000000022
-#alternative hypothesis: true location shift is not equal to 0
-
-# p-value = 0.00000000000000022
-# cut off = 0.05 
-
-# 0.00000000000000022 < 0.05  (true)
-# reject null/accept alternative
-# hence reject H0 and accept H1
-
-detach(covid_subset)
-
-
-
-#----------------------------------------- Research Question 4 ----------------------------------------------#
-# Research Question 4: Is there any link between life expectancy at birth in 2019 
-# and human development index?
-
-# H0: Covid does not affect life expectancy at birth in 2019 and human_development_index
-# H1: Covid-19 affect life expectancy at birth in 2019 and human_development_index
-
-# Analyzing the variables used in each variable
-# life_expectancy = categorical nominal variable, represented as proportions
-# human_development_index = categorical nominal variable, represented as proportions
-
-#--------------------------------------------------------------------------------------------------------------#
-
-
-# Using statistical methods to examine the relationship between our variables of interest
-# creating a subset of covid_data for convenient hypothesis testing
-
-attach(covid_data)
-names(covid_data)
-
-covid_subset <- subset(covid_data, 
-                       select = c(iso_code, location, date, life_expectancy, human_development_index))
-str(covid_subset)
-head(covid_subset)
-dim(covid_subset)
-sum(is.na(covid_subset))
-
-# Check for missing data
-incomplete_data <- covid_subset[!complete.cases(covid_subset),]
-nrow(incomplete_data)
-
-#Using mice library to display NA values and its count
-md.pattern(covid_subset)
-
-# Using VIM library and displayed the missing values
-missing_values <- aggr(covid_subset, prop = FALSE, numbers = TRUE)
-
-# show summary of the content of missing_values 
-summary(missing_values)
-
-# ----------------------------------------------- Linearity check --------------------------------------------------------------#
-
-# Check whether the variables used for the hypothesis test are normally distributed or not. 
-# Doing this visually and using a relevant statistical analysis test. 
-# Then decide on which statistical test you will use.
-
-# ChecK linearity of the variables 
-
-attach(covid_subset)
-
-plot(life_expectancy, human_development_index, pch = 9, col= "lightblue",
-     main = "Comparision of life_expectancy with human_development_index",
-     xlab = "life_expectancy",
-     ylab = "human_development_index")
-
-
-options(scipen = 999)
-ggplot(covid_subset, aes(x=total_deaths,y=diabetes_prevalence))+ geom_point(col="lightblue", size=3)
-
-
-# we can also examine the linear correlation between both variables using Quantile-quantile plot (Q-Q plot)
-with (covid_subset, {qqplot (life_expectancy, human_development_index,
-                             main = "Comparing life_expectancy and human_development_index",
-                             xlab = "life_expectancy",
-                             ylab = "human_development_index")})
-
-# Also using psych library to get correlation coefficient between the 2 variables
-covid_corr <- subset(covid_subset,
-                     select = c(life_expectancy, human_development_index))
-head(covid_corr)
-dim(covid_corr)
-
-my_sample<-covid_corr[sample(1:nrow(covid_subset), 10000, replace = FALSE),]
-my_sample
-
-
-pairs.panels(my_sample,
-             smooth = TRUE, # If TRUE, draws loess smooths
-             scale = FALSE, # If TRUE, scales the correlation text font    
-             density = TRUE, # If TRUE, adds density plots and histograms    
-             ellipses = TRUE, # If TRUE, draws ellipses    
-             method = "spearman",# Correlation method (also "pearson" or "kendall")    
-             pch = 21, # pch symbol    
-             lm = FALSE, # If TRUE, plots linear fit rather than the LOESS (smoothed) fit    
-             cor = TRUE, # If TRUE, reports correlations    
-             jiggle = FALSE, # If TRUE, data points are jittered    
-             factor = 2, # Jittering factor    
-             hist.col = 4, # Histograms color    
-             stars = TRUE, # If TRUE, adds significance level with stars    
-             ci = TRUE) # If TRUE, adds confidence intervals   
-
-
-# 0.92***
-# plotting histograms to view if the variables are normally Distributed 
-
-#arrange the plots in 1 rows by 2 cols
-opar = par(no.readonly = TRUE)
-par(mfrow = c(1,2))
-par = opar
-
-hist(total_deaths, col = "cyan", main = "distribution of life_expectancy" , 
-     xlab = "life_expectancy")
-hist(new_cases, col = "cyan", main = "distribution of human_development_index",
-     xlab = "human_development_index")
-
-
-# Using Quantile-quantile plot (Q-Q plot) allows us to check
-# if the data is normally distributed or not 
-
-#Islife_expectancy normally distributed?
-with (covid_subset, {qqnorm (life_expectancy,
-                             main = "Normal QQ-plot of life_expectancy",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-# Add line that represents normal distribution
-qqline(life_expectancy, col = "red")
-# life_expectancy appears not to be normally distributed
-
-
-#Is human_development_index normally distributed?
-with (covid_subset, {qqnorm (human_development_index,
-                             main = "Normal QQ-plot of human_development_index",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-
-# Add line that represents normal distribution
-qqline(new_cases, col = "red")
-# human_development_index appears not to be normally distributed
-
-
-# ------------------------------------------ shapiro-wilks test ---------------------------------------------------#
-# we can run the formal test of normality provided through the widely used
-# shapiro-wilks test
-
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 1000, replace = FALSE),]
-my_sample
-
-# normality test for life_expectancy
-normality_test <- shapiro.test(my_sample$life_expectancy )
-normality_test$p.value
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value= 0.0000000000000009363117
-# 0.0000000000000009363117 > 0.05 (False)
-# Therefore the var life_expectancy is not normally distributed
-
-# normality test for new_cases
-my_sample<-covid_subset[sample(1:nrow(covid_subset), 1000, replace = FALSE),]
-my_sample
-
-normality_test <- shapiro.test(my_sample$human_development_index)
-normality_test$p.value
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value= 0.0000000000000001671074
-# 0.0000000000000001671074 > 0.05 (False)
-# Therefore the var human_development_index is not normally distributed
-
-
-# Need to decide a test for calulating p-value
-# Here, both the variablea are categorical nominal.
-# The dependent variable is not normally distributed. 
-# Hence going for a non parametric test i.e. 
-# Chi-squared test 
-
-chisq <- chisq.test(covid_subset$life_expectancy, covid_subset$human_development_index)
-chisq
-
-#Pearson's Chi-squared test
-
-#data:  covid_subset$life_expectancy and covid_subset$human_development_index
-#X-squared = 10923255, df = 26274, p-value < 0.00000000000000022
-
-detach(covid_data)
-
-
-
-
-#----------------------------------------- Research Question 5 ----------------------------------------------#
-# Research Question 5: Does Stringency Index  impacted the new cases in Ireland?
-
-# H0: Stringency Index does not impact the new cases in Ireland.
-# H1: Stringency Index impacts the new cases in Ireland.
-
-# Analyzing the variables used in each variable
-# stringency_index = categorical nominal variable, represented as proportions
-# new_cases = continuous interval variable 
-
-#--------------------------------------------------------------------------------------------------------------#
-
-# Using statistical methods to examine the relationship between our variables of interest
-# creating a subset of covid_data for convenient hypothesis testing
-
-attach(covid_data)
-names(covid_data)
-
-covid_subset <- subset(covid_data, location %in% c("Ireland"), 
-                       select = c(iso_code, location, date, stringency_index, new_cases))
-str(covid_subset)
-head(covid_subset)
-dim(covid_subset)
-sum(is.na(covid_subset))
-
-# Check for missing data
-incomplete_data <- covid_subset[!complete.cases(covid_subset),]
-nrow(incomplete_data)
-
-#Using mice library to display NA values and its count
-md.pattern(covid_subset)
-
-# Using VIM library and displayed the missing values
-missing_values <- aggr(covid_subset, prop = FALSE, numbers = TRUE)
-
-# show summary of the content of missing_values 
-summary(missing_values)
-
-# ----------------------------------------------- Linearity check --------------------------------------------------------------#
-
-# ChecK linearity of the variables 
-
-attach(covid_subset)
-
-plot(stringency_index, new_cases, pch = 9, col= "lightblue",
-     main = "comparision of stringency_index with new_cases in Ireland",
-     xlab = "stringency_index",
-     ylab = "new_cases")
-
-
-options(scipen = 999)
-ggplot(covid_subset, aes(x=stringency_index,y=new_cases))+ geom_point(col="lightblue", size=3)
-
-
-# we can also examine the linear correlation between both variables using Quantile-quantile plot (Q-Q plot)
-with (covid_subset, {qqplot (life_expectancy, new_cases,
-                             main = "comparision of stringency_index with new_cases in Ireland",
-                             xlab = "stringency_index",
-                             ylab = "new_cases")})
-
-# Also using psych library to get correlation coefficient between the 2 variables
-covid_corr <- subset(covid_subset,
-                     select = c(stringency_index, new_cases))
-head(covid_corr)
-dim(covid_corr)
-
-pairs.panels(covid_corr,
-             smooth = TRUE, # If TRUE, draws loess smooths
-             scale = FALSE, # If TRUE, scales the correlation text font    
-             density = TRUE, # If TRUE, adds density plots and histograms    
-             ellipses = TRUE, # If TRUE, draws ellipses    
-             method = "spearman",# Correlation method (also "pearson" or "kendall")    
-             pch = 21, # pch symbol    
-             lm = FALSE, # If TRUE, plots linear fit rather than the LOESS (smoothed) fit    
-             cor = TRUE, # If TRUE, reports correlations    
-             jiggle = FALSE, # If TRUE, data points are jittered    
-             factor = 2, # Jittering factor    
-             hist.col = 4, # Histograms color    
-             stars = TRUE, # If TRUE, adds significance level with stars    
-             ci = TRUE) # If TRUE, adds confidence intervals   
-
-
-# 0.60***
-# ---------------------------- Normal Distribution ------------------------------------------------#
-
-# Check whether the variables used for the hypothesis test are normally distributed or not. 
-# Doing this visually and using a relevant statistical analysis test. 
-# Then decide on which statistical test you will use.
-
-# plotting histograms to view if the variables are normally Distributed 
-
-#arrange the plots in 1 rows by 2 cols
-opar = par(no.readonly = TRUE)
-par(mfrow = c(1,2))
-
-
-hist(stringency_index, col = "blue", main = "distribution of stringency_index" , 
-     xlab = "stringency_index")
-hist(new_cases, col = "blue", main = "distribution of new_cases",
-     xlab = "new_cases")
-
-par = opar
-
-# Using Quantile-quantile plot (Q-Q plot) allows us to check
-# if the data is normally distributed or not 
-
-#Is stringency_index normally distributed?
-with (covid_subset, {qqnorm (stringency_index,
-                             main = "Normal QQ-plot of stringency_index in Ireland",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-# Add line that represents normal distribution
-qqline(stringency_index, col = "red")
-# stringency_index appears not to be normally distributed
-
-
-#Is new_cases normally distributed?
-with (covid_subset, {qqnorm (new_cases,
-                             main = "Normal QQ-plot of new_cases in Ireland",
-                             xlab = "Theoritical Quantiles",
-                             ylab = "Samples Quantiles")})
-
-# Add line that represents normal distribution
-qqline(new_cases, col = "red")
-# new_cases appears not to be normally distributed
-
-
-# ------------------------------------------ shapiro-wilks test ---------------------------------------------------#
-# we can run the formal test of normality provided through the widely used
-# shapiro-wilks test
-
-# normality test for life_expectancy
-normality_test <- shapiro.test(covid_subset$stringency_index )
-normality_test$p.value
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value= 0.00000000000000000001340043
-# 0.00000000000000000001340043 > 0.05 (False)
-# Therefore the var life_expectancy is not normally distributed
-
-# normality test for new_cases
-normality_test <- shapiro.test(covid_subset$new_cases)
-normality_test$p.value
-
-#p-value tells us  the chance  that the sample 
-# comes form a normal distribution
-# if p < 0.05 the variable is not normally distributed
-
-# In this example p-value= 0.00000000000000000000000000000001248359
-# 0.00000000000000000000000000000001248359 > 0.05 (False)
-# Therefore the var new_cases is not normally distributed
-
-
-# Need to decide a test for calulating p-value
-# Here, one of the variable is continuous and other is categorical nominal.
-# The dependent variable is not normally distributed. 
-# Hence going for a non parametric test i.e. 
-# Wilcoxon signed  rank test 
-
-
-wilcox.test(stringency_index, new_cases)  
-
-# p-value = 0.00000000000000022
-# cut off = 0.05 
-
-# 0.00000000000000022 < 0.05  (true)
-# reject null/accept alternative
-# hence reject H0 and accept H1
-
-
-
-
-#======================================================= The End =======================================================#
-
+# 48.21254
