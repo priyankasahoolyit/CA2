@@ -116,6 +116,7 @@ dim(covid_EU_2021)            # Provides the attributes on the data frame,
 
 # Lets find out if there are any NA's in the data
 # Using na.omit() to store any full rows into new_data frame
+
 final_df<-na.omit(covid_EU_2021)
 dim(final_df)
 
@@ -124,23 +125,24 @@ dim(final_df)
 # Hence, not an option to proceed with. 
 
 
-
 # complete.cases() returns a vector with no missing values, can be swapped by using the `!`
 # Using complete.cases() to show all complete rows store in complete_data
 # and `!` complete_cases() for missing_data accordingly.
 # Then using nrow() to show a total of all complete and missing rows
+
 complete_data <-covid_EU_2021[complete.cases(covid_EU_2021),]
 nrow(complete_data)
 missing_data <-covid_EU_2021[!complete.cases(covid_EU_2021),]
 nrow(missing_data)
 
 nrow(complete_data) - nrow(missing_data) 
-# -5968, Here as well its evident that the none of the rows are complete out of 5968 observations. 
-
+# Total number of observations - 5968
+# Here as well its evident that the none of the rows are complete out of 5968 observations.
 
 
 # Now, getting the total number of `NA` values to see, how many null values were there in the entire dataset.
 # Finding which columns contain `NA` values
+
 sum(is.na(covid_EU_2021))                                   # Count of `NA` is 35234
 names(which(sapply(covid_EU_2021, anyNA)))                  # Almost all the variables contains `NA`,
                                                             # except iso_code, location, date
@@ -156,12 +158,13 @@ covid_pattern <- subset(covid_EU_2021,
                                    aged_70_older, diabetes_prevalence, female_smokers, male_smokers,
                                    handwashing_facilities, life_expectancy, human_development_index))
 
-
+library(mice)
 md.pattern(covid_pattern, plot = TRUE, rotate.names = TRUE)
 
 
 # The visualization produced by mice library is not very clear and readable.
 # Hence, using VIM library and displayed the missing values
+#library(VIM)
 missing_values <- aggr(covid_EU_2021,cex.axis=.5, prop = FALSE, numbers = TRUE)
 
 # show summary of the content of missing_values 
@@ -261,19 +264,19 @@ my_sample
 
 library(psych)
 pairs.panels(covid_corr,
-             smooth = TRUE, # If TRUE, draws loess smooths
-             scale = FALSE, # If TRUE, scales the correlation text font    
-             density = TRUE, # If TRUE, adds density plots and histograms    
-             ellipses = TRUE, # If TRUE, draws ellipses    
+             smooth = TRUE,      # If TRUE, draws loess smooths
+             scale = FALSE,      # If TRUE, scales the correlation text font    
+             density = TRUE,     # If TRUE, adds density plots and histograms    
+             ellipses = TRUE,    # If TRUE, draws ellipses    
              method = "spearman",# Correlation method (also "pearson" or "kendall")    
-             pch = 21, # pch symbol    
-             lm = FALSE, # If TRUE, plots linear fit rather than the LOESS (smoothed) fit    
-             cor = TRUE, # If TRUE, reports correlations    
-             jiggle = FALSE, # If TRUE, data points are jittered    
-             factor = 2, # Jittering factor    
-             hist.col = 4, # Histograms color    
-             stars = TRUE, # If TRUE, adds significance level with stars    
-             ci = TRUE) # If TRUE, adds confidence intervals   
+             pch = 21,           # pch symbol    
+             lm = FALSE,         # If TRUE, plots linear fit rather than the LOESS (smoothed) fit    
+             cor = TRUE,         # If TRUE, reports correlations    
+             jiggle = FALSE,     # If TRUE, data points are jittered    
+             factor = 2,         # Jittering factor    
+             hist.col = 4,       # Histograms color    
+             stars = TRUE,       # If TRUE, adds significance level with stars    
+             ci = TRUE)          # If TRUE, adds confidence intervals   
 
 # This chart provides a general level of detail on linearity of the independent variable with the depend
 # variables. It is observed that each of the predictor variables is skewed to some extent.
@@ -412,7 +415,6 @@ cor(covid_EU_2021$new_cases, covid_EU_2021$total_smokers) # 0.09356765
 paste("Correlation for new_cases and population: ", cor(covid_EU_2021$new_cases, covid_EU_2021$population))
 paste("Correlation for new_cases and people_fully_vaccinated: ", cor(covid_EU_2021$new_cases, covid_EU_2021$people_fully_vaccinated))
 paste("Correlation for new_cases and stringency_index: ", cor(covid_EU_2021$new_cases, covid_EU_2021$stringency_index))
-paste("Correlation for new_cases and handwashing_facilities: ", cor(covid_EU_2021$new_cases, covid_EU_2021$handwashing_facilities))
 
 paste("Correlation for new_cases and icu_patients: ", cor(covid_EU_2021$new_cases, covid_EU_2021$icu_patients))
 paste("Correlation for new_cases and hosp_patients: ", cor(covid_EU_2021$new_cases, covid_EU_2021$hosp_patients))
@@ -450,10 +452,9 @@ paste("Correlation for new_cases and human_development_index: ", cor(covid_EU_20
 # Therefore, let's remove it from the dataset. Alternatively we can choose to exclude these dependent variables when
 # we are constructing the linear model.
 
-covid_EU_2021 <- subset(covid_EU_2021, select = -c( new_tests, total_tests ))
+covid_EU_2021 <- subset(covid_EU_2021, select = -c( new_tests, total_tests, handwashing_facilities  ))
 head(covid_EU_2021)
 detach (covid_EU_2021)
-
 
 # ----------------------------------------------- Outliers -------------------------------------------------#
 
@@ -493,13 +494,6 @@ boxplot(stringency_index,
         sub = paste("Outlier rows: ",
                     boxplot.stats(stringency_index)$out)) 
 # Outlier rows: 0 
-
-# box plot for 'handwashing_facilities'
-boxplot(handwashing_facilities,
-        main = "handwashing_facilities",
-        sub = paste("Outlier rows: ",
-                    boxplot.stats(handwashing_facilities)$out))
-
 
 # box plot for 'icu_patients'
 boxplot(icu_patients,
@@ -585,13 +579,6 @@ paste("population outliers: ", paste(outlier_values, collapse=", "))
 outlier_values <- boxplot.stats(covid_EU_2021$stringency_index)$out 
 paste("stringency_index outliers: ", paste(outlier_values, collapse=", "))
 
-
-# Use boxplot.stats() function to generate relevant outliers for handwashing_facilities
-# handwashing_facilities outliers: Too many, cannot remove all
-outlier_values <- boxplot.stats(covid_EU_2021$handwashing_facilities)$out 
-paste("handwashing_facilities outliers: ", paste(outlier_values, collapse=", "))
-
-
 # Use boxplot.stats() function to generate relevant outliers for icu_patients
 # icu_patients outliers: Too many, cannot remove all
 outlier_values <- boxplot.stats(covid_EU_2021$icu_patients)$out 
@@ -649,12 +636,14 @@ paste("human_development_index outliers: ", paste(outlier_values, collapse=", ")
 
 # ---------------------------------------------- Remove Outliers ------------------------------------------#
 # Now remove all of these outliers by choosing the maximum/ minimum deviation from the values list above  .
+# By using summary() function IQR for the variable is calculated and then add/subtract 1.5*IQR to the third quartile.
+# Any observation greater or lesser respectively is considered as suspected outlier.
 
 # Remove new_cases outliers
 summary( covid_EU_2021$new_cases)
 covid_EU_2021 <- subset(covid_EU_2021,
                         covid_EU_2021$new_cases > 0
-                        & covid_EU_2021$new_cases < 8000)
+                        & covid_EU_2021$new_cases < 80000)
 
 plot(density(covid_EU_2021$new_cases),
      main = "Density plot : new_cases",
@@ -677,7 +666,7 @@ plot(density(covid_EU_2021$population),
 # Remove people_fully_vaccinated outliers
 summary( covid_EU_2021$people_fully_vaccinated)
 covid_EU_2021 <- subset(covid_EU_2021, 
-                        covid_EU_2021$people_fully_vaccinated < 200000)
+                        covid_EU_2021$people_fully_vaccinated < 1500000)
 
 # density plot for people_fully_vaccinated
 plot(density(covid_EU_2021$people_fully_vaccinated),
@@ -697,22 +686,10 @@ plot(density(covid_EU_2021$stringency_index),
      ylab = "Frequency", xlab = "stringency_index",
      sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$stringency_index), 2)))
 
-
-
-# Remove handwashing_facilities  outliers
-#covid_EU_2021 <- subset(covid_EU_2021,
-#  covid_EU_2021$handwashing_facilities > 1000)
-
-plot(density(covid_EU_2021$handwashing_facilities ),
-     main = "Density plot : handwashing_facilities",
-     ylab = "Frequency", xlab = "handwashing_facilities",
-     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$handwashing_facilities), 2)))
-
-
 # Remove icu_patients  outliers
 summary(covid_EU_2021$icu_patients)
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$icu_patients <400)
+                        covid_EU_2021$icu_patients <1800)
 
 # density plot for icu_patients
 plot(density(covid_EU_2021$icu_patients ),
@@ -724,7 +701,7 @@ plot(density(covid_EU_2021$icu_patients ),
 # Remove hosp_patients  outliers
 summary(covid_EU_2021$hosp_patients)
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$hosp_patients < 1000)
+                        covid_EU_2021$hosp_patients < 9000)
 
 # density plot for hosp_patients
 plot(density(covid_EU_2021$hosp_patients ),
@@ -735,12 +712,11 @@ plot(density(covid_EU_2021$hosp_patients ),
 
 # Remove aged_70_older  outliers
 summary(covid_EU_2021$aged_70_older)
-covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$aged_70_older  < 993889) 
+#covid_EU_2021 <- subset(covid_EU_2021,
+                        #covid_EU_2021$aged_70_older  < 993889) 
 
 
 # density plot for aged_70_older
-summary(covid_EU_2021$diabetes_prevalence)
 plot(density(covid_EU_2021$aged_70_older ),
      main = "Density plot : aged_70_older",
      ylab = "Frequency", xlab = "aged_70_older",
@@ -748,6 +724,7 @@ plot(density(covid_EU_2021$aged_70_older ),
 
 
 # Remove diabetes_prevalence  outliers
+summary(covid_EU_2021$diabetes_prevalence)
 covid_EU_2021 <- subset(covid_EU_2021,
                         covid_EU_2021$diabetes_prevalence  <1873750) 
 
@@ -760,8 +737,8 @@ plot(density(covid_EU_2021$diabetes_prevalence ),
 
 # Remove total_smokers  outliers
 summary(covid_EU_2021$total_smokers)
-covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$total_smokers  < 5300500)
+#covid_EU_2021 <- subset(covid_EU_2021,
+                       # covid_EU_2021$total_smokers  < 9099327)
 
 # density plot for total_smokers
 plot(density(covid_EU_2021$total_smokers ),
@@ -773,7 +750,7 @@ plot(density(covid_EU_2021$total_smokers ),
 # Remove new_tests_smoothed  outliers
 summary(covid_EU_2021$new_tests_smoothed)
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$new_tests_smoothed  < 20000 )
+                        covid_EU_2021$new_tests_smoothed  < 400000)
 
 # density plot for new_tests_smoothed
 plot(density(covid_EU_2021$new_tests_smoothed ),
@@ -785,7 +762,7 @@ plot(density(covid_EU_2021$new_tests_smoothed ),
 # Remove new_vaccinations_smoothed  outliers
 summary(covid_EU_2021$new_vaccinations_smoothed)
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$new_vaccinations_smoothed  < 10000 )
+                        covid_EU_2021$new_vaccinations_smoothed  < 100000)
 
 # density plot for new_vaccinations_smoothed
 plot(density(covid_EU_2021$new_vaccinations_smoothed ),
@@ -828,7 +805,7 @@ dim(covid_EU_2021)
 # Using Skewness function to examine normality
 # library(e1071)
 opar <- par(no.readonly = TRUE)
-par(mfrow = c(1,2))                      # divide graph area into 1 row x 2 cols
+par(mfrow = c(2,2))                      # divide graph area into 1 row x 2 cols
 
 
 # density plot for new_cases
@@ -869,17 +846,6 @@ plot(density(covid_EU_2021$stringency_index),
 
 # fill the area under the plot
 polygon(density(covid_EU_2021$stringency_index ), col = "red")
-
-
-# density plot for handwashing_facilities
-plot(density(covid_EU_2021$handwashing_facilities ),
-     main = "Density plot : handwashing_facilities",
-     ylab = "Frequency", xlab = "handwashing_facilities",
-     sub = paste("Skewness : ", round(e1071::skewness(covid_EU_2021$handwashing_facilities), 2)))
-
-
-# fill the area under the plot	 
-polygon(density(covid_EU_2021$handwashing_facilities), col = "red")
 
 
 # density plot for icu_patients
@@ -986,24 +952,22 @@ paste("Skewness for stringency_index)) : ", round(e1071::skewness(covid_EU_2021$
 paste("Skewness for aged_70_older : ", round(e1071::skewness(covid_EU_2021$aged_70_older),2))
 paste("Skewness for diabetes_prevalence)) : ", round(e1071::skewness(covid_EU_2021$diabetes_prevalence),2))
 paste("Skewness for total_smokers)) : ", round(e1071::skewness(covid_EU_2021$total_smokers), 2))
-paste("Skewness for handwashing_facilities)) : ", round(e1071::skewness(covid_EU_2021$handwashing_facilities), 2))
 paste("Skewness for life_expectancy)) : ", round(e1071::skewness(covid_EU_2021$life_expectancy), 2))
 paste("Skewness for human_development_index)) : ", round(e1071::skewness(covid_EU_2021$human_development_index), 2))
 
-# "Skewness for new_cases:  1.66"
-# "Skewness for icu_patients:  2.49"
-# "Skewness for hosp_patients:  1.07"
-# "Skewness for new_tests_smoothed)) :  0.94"
-# "Skewness for new_vaccinations_smoothed)) :  1"
-# "Skewness for people_fully_vaccinated :  2.01"
-# "Skewness for population:  0.52"
-# "Skewness for stringency_index)) :  0.54"
-# "Skewness for aged_70_older :  0.96"
-# "Skewness for diabetes_prevalence)) :  0.5"
-# "Skewness for total_smokers)) :  0.37"
-# "Skewness for handwashing_facilities)) :  1.81"
-# "Skewness for life_expectancy)) :  -0.7"
-# "Skewness for human_development_index)) :  -0.64"	
+# "Skewness for new_cases:  3.55"
+# "Skewness for icu_patients:  2.83"
+# "Skewness for hosp_patients:  2.22"
+# "Skewness for new_tests_smoothed)) :  3.01"
+# "Skewness for new_vaccinations_smoothed)) :  1.85"
+# "Skewness for people_fully_vaccinated :   2.66"
+# "Skewness for population:  0.63"
+# "Skewness for stringency_index)) :  -0.4"
+# "Skewness for aged_70_older :  0.69"
+# "Skewness for diabetes_prevalence)) :  0.71"
+# "Skewness for total_smokers)) :  0.71"
+# "Skewness for life_expectancy)) :  -0.73"
+# "Skewness for human_development_index)) :  -0.6"	
 
 # Here is the standard metrics for skewness.
 # Minimal skewness = -0.11 - slightly skewed to the left. 
@@ -1028,7 +992,6 @@ par <- opar
 
 attach(covid_EU_2021)
 
-
 #-------------------------------------------Multiple Linear Regression MOdel building ----------------------------------------#
 
 # Splitting Training and testing datasets
@@ -1041,7 +1004,7 @@ testing_data <- covid_EU_2021[-sample, ]
 # Now that the data variables are examined, so build the multiple regresion model.
 # Building the MLR model
 
-fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + handwashing_facilities +
+fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + 
               icu_patients + hosp_patients + aged_70_older + diabetes_prevalence +
               total_smokers + new_tests_smoothed + new_vaccinations_smoothed + life_expectancy + 
               human_development_index, data=training_data)
@@ -1068,26 +1031,26 @@ library(car)
 qqPlot(fit, labels=row.names(covid_EU_2021), id.method="identify", 
        simulate=TRUE, main="Q-Q Plot")
 
-# 25980 25978 
-# 1419  3320
+# 73679 73672 
+#   601  2140 
 
-training_data[1419,]
-training_data[3320,]
+training_data[601,]
+training_data[2140,]
 
 # The fitted() function extracts fitted values from objects returned by modeling functions. 
 # It returns the predicted new cases rate for a particular state.
 
-fitted(fit)[207]   # 45051 611.1062 
-fitted(fit)[755]  # 50045  966.5526
+fitted(fit)[601]   # 4406.293  
+fitted(fit)[2140]  # 4097.581
 
 dim(covid_EU_2021)
 # Remove  outliers
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$location != "Europe  "
-                        & covid_EU_2021$date != "2021-01-07")
+                        covid_EU_2021$location != "Sweden"
+                        & covid_EU_2021$date != "2021-04-06")
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$location != "Europe  "
-                        & covid_EU_2021$date != "2021-01-05")
+                        covid_EU_2021$location != "Sweden"
+                        & covid_EU_2021$date != "2021-04-13")
 
 #Split the data into Training and testing datasets again
 set.seed(1)
@@ -1097,7 +1060,7 @@ training_data <- covid_EU_2021[sample, ]
 testing_data <- covid_EU_2021[-sample, ]
 
 #Then rebuild the MLR model again
-fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + handwashing_facilities +
+fit <- lm(new_cases ~ people_fully_vaccinated + population + stringency_index + 
               icu_patients + hosp_patients + aged_70_older + diabetes_prevalence +
               total_smokers + new_tests_smoothed + new_vaccinations_smoothed + life_expectancy +
               human_development_index, data=training_data)
@@ -1131,6 +1094,13 @@ cutoff <- 4/(nrow(training_data) - length(fit$coefficients) - 2)
 plot(fit, which = 4, cook.levels = cutoff)
 abline(h = cutoff, lty = 2, col = "red")
 
+
+#61707 20096 
+#1511  2079
+
+training_data[1511,]
+training_data[2079,]
+
 #library(car)
 avPlots(fit, ask=FALSE)
 
@@ -1146,7 +1116,7 @@ ncvTest(fit)
 
 # Non-constant Variance Score Test 
 # Variance formula: ~ fitted.values 
-# Chisquare = 387.539, Df = 1, p = < 2.22e-16
+# Chisquare = 3247.046, Df = 1, p = < 2.22e-16
 
 # The score test is nonsignificant (p = 0.45229), suggesting that we have met the constant variance
 # assumption. If the p value is significant (p < 0.05), we would assume that the error variance
@@ -1154,7 +1124,7 @@ ncvTest(fit)
 
 spreadLevelPlot(fit)
 
-# Suggested power transformation:  0.007314462 
+# Suggested power transformation:  0.2673039  
 
 
 #------------------------------------------ Global validation of linear model assumption ----------------------------------------#
@@ -1213,25 +1183,23 @@ training_data$new_cases_sqrt <- sqrt_transform_new_cases
 training_data$new_cases_sqrt
 
 fit_model1 <- lm(new_cases ~ people_fully_vaccinated + population + 
-                     stringency_index + handwashing_facilities + 
-                     icu_patients + hosp_patients + aged_70_older +  
-                     diabetes_prevalence + total_smokers+
+                     stringency_index + icu_patients + hosp_patients +
+                     aged_70_older + diabetes_prevalence + total_smokers+
                      new_tests_smoothed + new_vaccinations_smoothed +
                      life_expectancy + human_development_index, data=training_data)
 
 
 fit_model2 <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
-                     stringency_index + handwashing_facilities + 
-                     icu_patients + hosp_patients + aged_70_older +  
-                     diabetes_prevalence + total_smokers+
-                     new_tests_smoothed + new_vaccinations_smoothed +
-                     life_expectancy + human_development_index, data=training_data)
+                         stringency_index + icu_patients + hosp_patients +
+                         aged_70_older + diabetes_prevalence + total_smokers+
+                         new_tests_smoothed + new_vaccinations_smoothed +
+                         life_expectancy + human_development_index, data=training_data)
 
 AIC(fit_model1,fit_model2)
 
 
-spreadLevelPlot(fit_model1) # Suggested power transformation:  0.007314462 
-spreadLevelPlot(fit_model2) # Suggested power transformation:  0.2768732 
+spreadLevelPlot(fit_model1) # Suggested power transformation:  0.2673039  
+spreadLevelPlot(fit_model2) # Suggested power transformation:  0.4135183 
 
 
 #-------------------------------------------- Comparing multiple models ----------------------------------------------#
@@ -1240,8 +1208,7 @@ spreadLevelPlot(fit_model2) # Suggested power transformation:  0.2768732
 
 library(MASS)
 fit_test <- lm(new_cases ~ people_fully_vaccinated + population + 
-                   stringency_index + handwashing_facilities + 
-                   icu_patients + hosp_patients + aged_70_older +  
+                   stringency_index + icu_patients + hosp_patients + aged_70_older +  
                    diabetes_prevalence + total_smokers + new_tests_smoothed +
                    new_vaccinations_smoothed + life_expectancy + human_development_index, data=training_data)
 stepAIC(fit_test, direction="backward")
@@ -1250,10 +1217,10 @@ stepAIC(fit_test, direction="backward")
 # SUBSETS REGRESSION
 library(leaps)
 leaps <-regsubsets(new_cases ~ people_fully_vaccinated + population + 
-                       stringency_index + handwashing_facilities + 
-                       icu_patients + hosp_patients + aged_70_older +  
-                       diabetes_prevalence + total_smokers + new_tests_smoothed + new_vaccinations_smoothed +
-                       life_expectancy + human_development_index, data=training_data, nbest=4)
+                           stringency_index + icu_patients + hosp_patients +
+                           aged_70_older + diabetes_prevalence + total_smokers+
+                           new_tests_smoothed + new_vaccinations_smoothed +
+                           life_expectancy + human_development_index, data=training_data, nbest=4)
 plot(leaps, scale="adjr2")
 
 
@@ -1264,37 +1231,35 @@ plot(leaps, scale="adjr2")
 
 #library(MASS)
 fit_test <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
-                   stringency_index + handwashing_facilities + 
-                   icu_patients + hosp_patients + aged_70_older +  
-                   diabetes_prevalence + total_smokers + new_tests_smoothed + new_vaccinations_smoothed +
-                   life_expectancy + human_development_index, data=training_data)
+                       stringency_index + icu_patients + hosp_patients +
+                       aged_70_older + diabetes_prevalence + total_smokers+
+                       new_tests_smoothed + new_vaccinations_smoothed +
+                       life_expectancy + human_development_index, data=training_data)
 stepAIC(fit_test, direction="backward")
 
 # SUBSETS REGRESSION on transformed response variable
 #library(leaps)
 leaps <-regsubsets(new_cases_sqrt ~ people_fully_vaccinated + population + 
-                       stringency_index + handwashing_facilities + 
-                       icu_patients + hosp_patients + aged_70_older +  
-                       diabetes_prevalence + total_smokers + new_tests_smoothed +
-                       new_vaccinations_smoothed + life_expectancy + human_development_index,
-                   data=training_data, nbest=4)
+                           stringency_index + icu_patients + hosp_patients +
+                           aged_70_older + diabetes_prevalence + total_smokers+
+                           new_tests_smoothed + new_vaccinations_smoothed +
+                           life_expectancy + human_development_index, data=training_data, nbest=4)
 plot(leaps, scale="adjr2")
 
 
 #---------------------------------------------------- Examining Predicted Accuracy ---------------------------------#
 
 fit_model <- lm(new_cases ~ people_fully_vaccinated + population + 
-                    stringency_index + handwashing_facilities + 
-                    icu_patients + hosp_patients + aged_70_older +  
-                    diabetes_prevalence + total_smokers + new_tests_smoothed +
-                    new_vaccinations_smoothed + life_expectancy + human_development_index, data=training_data)
+                        stringency_index + icu_patients + hosp_patients +
+                        aged_70_older + diabetes_prevalence + total_smokers+
+                        new_tests_smoothed + new_vaccinations_smoothed +
+                        life_expectancy + human_development_index, data=training_data)
 
 fit_model_sqrt <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
-                         stringency_index + handwashing_facilities + 
-                         icu_patients + hosp_patients + aged_70_older +  
-                         diabetes_prevalence + total_smokers + new_tests_smoothed +
-                         new_vaccinations_smoothed + life_expectancy +
-                         human_development_index, data=training_data)
+                             stringency_index + icu_patients + hosp_patients +
+                             aged_70_older + diabetes_prevalence + total_smokers+
+                             new_tests_smoothed + new_vaccinations_smoothed +
+                             life_expectancy + human_development_index, data=training_data)
 
 predicted_new_cases <- predict(fit_model, testing_data)
 predicted_new_cases_sqrt <- predict(fit_model_sqrt, testing_data)
@@ -1306,44 +1271,44 @@ converted_new_cases_sqrt
 actuals_predictions <- data.frame(cbind(actuals = testing_data$new_cases, predicted = predicted_new_cases))
 head(actuals_predictions)
 
-# make actuals_predicted dataframe for sqrt(Murder)
+# make actuals_predicted dataframe for sqrt(new_cases)
 actuals_predictions_sqrt <- data.frame(cbind(actuals = testing_data$new_cases, predicted = converted_new_cases_sqrt))
 head(actuals_predictions_sqrt)
 
 correlation_accuracy <- cor(actuals_predictions)
 correlation_accuracy
-#actuals predicted
-#actuals   1.0000000 0.6191986
-#predicted 0.6191986 1.0000000
+#            actuals predicted
+#actuals   1.0000000 0.7897501
+#predicted 0.7897501 1.0000000
 
 correlation_accuracy <- cor(actuals_predictions_sqrt)
 correlation_accuracy
-#actuals predicted
-#actuals   1.0000000 0.6000706
-#predicted 0.6000706 1.0000000
+#            actuals predicted
+#actuals   1.0000000 0.7909234
+#predicted 0.7909234 1.0000000
 
 
 # Min - max accuracy
 min_max_accuracy <- mean(apply(actuals_predictions, 1, min) / apply(actuals_predictions, 1, max))
 min_max_accuracy
 
-# 0.5269857
+# 0.5779885
 
 # Min - max accuracy
 min_max_accuracy <- mean(apply(actuals_predictions_sqrt, 1, min) / apply(actuals_predictions_sqrt, 1, max))
 min_max_accuracy
 
-# 0.5961353
+# 0.6065882
 
 #----------------------------------------- Residual Standard Error (RSE), or sigma --------------------------------------#
 
 sigma(fit_model)/ mean(testing_data$new_cases)
-# 0.6511408
+# 0.8670614
 # This estimates the error of 65% on the existing data set.
 
 
 sigma(fit_model_sqrt)/ mean(testing_data$new_cases)
-# 0.01186012
+# 0.007686982
 # This estimates an error rate of 1% with the data we have at hand.
 
 #-------------------------------------- Executing final model with varied inputs ----------------------------------------#
@@ -1354,35 +1319,32 @@ attach (covid_EU_2021)
 # Checking the ranges in input data bu using Summary function
 summary(covid_EU_2021)
 
-df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
-                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
-                 icu_patients = c(42.17), hosp_patients = c(601.6),
+df <- data.frame(people_fully_vaccinated = c(113615), population = c(5558635), 
+                 stringency_index = c(63.32), icu_patients = c(128.1), hosp_patients = c(1050),
                  new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
-                 aged_70_older = c(226878), diabetes_prevalence = c(135926),
-                 total_smokers = c(1199276), life_expectancy = c(79.37),
-                 human_development_index = c(0.8669))
+                 aged_70_older = c(641858), diabetes_prevalence = c(347146),
+                 total_smokers = c(3276721), life_expectancy = c(79.64),
+                 human_development_index = c(0.882))
 predicted_new_cases <- predict(fit_model, df)
 predicted_new_cases
 
-df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
-                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
-                 icu_patients = c(42.17), hosp_patients = c(601.6),
+
+df <- data.frame(people_fully_vaccinated = c(113615), population = c(5558635), 
+                 stringency_index = c(63.32), icu_patients = c(128.1), hosp_patients = c(1050),
                  new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
-                 aged_70_older = c(226878), diabetes_prevalence = c(135926),
-                 total_smokers = c(1199276), life_expectancy = c(79.37),
-                 human_development_index = c(0.8669))
+                 aged_70_older = c(641858), diabetes_prevalence = c(347146),
+                 total_smokers = c(3276721), life_expectancy = c(79.64),
+                 human_development_index = c(0.882))
 predicted_new_cases <- predict(fit_model_sqrt, df)
 predicted_new_cases^2
-
-# 16.68512 
+# 1145.157
 
 
 
 # 593.4031
 
 df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
-                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
-                 icu_patients = c(42.17), hosp_patients = c(601.6),
+                 stringency_index = c(88.89), icu_patients = c(42.17), hosp_patients = c(601.6),
                  new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
                  aged_70_older = c(226878), diabetes_prevalence = c(135926),
                  total_smokers = c(1199276), life_expectancy = c(79.37),
@@ -1394,8 +1356,7 @@ predicted_new_cases
 
 
 df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
-                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
-                 icu_patients = c(42.17), hosp_patients = c(601.6),
+                 stringency_index = c(88.89), icu_patients = c(42.17), hosp_patients = c(601.6),
                  new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
                  aged_70_older = c(226878), diabetes_prevalence = c(135926),
                  total_smokers = c(1199276), life_expectancy = c(79.37),
