@@ -22,8 +22,8 @@ install.packages("VIM")       # Install VIM package and displayed the missing va
 install.packages("psych")     # Install psych package to find correlations coefficients between multiple variables
 install.packages("gvlma")     # Install package designed to detect skewness, kurtosis, a nonlinear link function, and heteroscedasticity
 install.packages("leaps")     # performs an exhaustive search for the best subsets of the variables in x for predicting y in
-# linear regression, using an efficient branch-and-bound algorithm.
-install.packages("e1071")
+                              # linear regression, using an efficient branch-and-bound algorithm.
+install.packages("e1071")     # Install package for computation power for decision and probability values for predictions
 
 library(ggplot2)
 library(mice)
@@ -110,13 +110,12 @@ covid_EU_2021 <- subset(covid_EU, format.Date(date, "%Y") == "2021" )
 str(covid_EU_2021)            # Check the structure of data frame
 head(covid_EU_2021)           # Displays first 5 rows of data frame
 dim(covid_EU_2021)            # Provides the attributes on the data frame,
-# i.e. 5968 observations and 24 columns
+                              # i.e. 5968 observations and 26 columns
 
 # -------------------------------------- Identifying the missing values------------------------------------#
 
 # Lets find out if there are any NA's in the data
 # Using na.omit() to store any full rows into new_data frame
-
 final_df<-na.omit(covid_EU_2021)
 dim(final_df)
 
@@ -124,31 +123,32 @@ dim(final_df)
 # so na.omit() function is dropping all the rows from the data frame.
 # Hence, not an option to proceed with. 
 
+
+
 # complete.cases() returns a vector with no missing values, can be swapped by using the `!`
 # Using complete.cases() to show all complete rows store in complete_data
 # and `!` complete_cases() for missing_data accordingly.
 # Then using nrow() to show a total of all complete and missing rows
-
 complete_data <-covid_EU_2021[complete.cases(covid_EU_2021),]
 nrow(complete_data)
 missing_data <-covid_EU_2021[!complete.cases(covid_EU_2021),]
 nrow(missing_data)
 
 nrow(complete_data) - nrow(missing_data) 
-# -5968
-# Here as well its evident that the none of the rows are complete out of 5968 observations. 
+# -5968, Here as well its evident that the none of the rows are complete out of 5968 observations. 
+
 
 
 # Now, getting the total number of `NA` values to see, how many null values were there in the entire dataset.
 # Finding which columns contain `NA` values
-
 sum(is.na(covid_EU_2021))                                   # Count of `NA` is 35234
 names(which(sapply(covid_EU_2021, anyNA)))                  # Almost all the variables contains `NA`,
-# except iso_code, location, date
+                                                            # except iso_code, location, date
+
 
 # Various diagnostic plots are available to inspect the quality of the imputations.
-# Here using mice library to display NA values and its count
-
+# Here using mice library to display NA values and its count.
+# As there is large number of variables so it would be difficult to visualize all, hence subsetting
 covid_pattern <- subset(covid_EU_2021,
                         select = c(new_cases,  icu_patients, hosp_patients, new_tests_smoothed,
                                    positive_rate, new_vaccinations_smoothed, population,
@@ -159,16 +159,17 @@ covid_pattern <- subset(covid_EU_2021,
 
 md.pattern(covid_pattern, plot = TRUE, rotate.names = TRUE)
 
-# Using VIM library and displayed the missing values
+
+# The visualization produced by mice library is not very clear and readable.
+# Hence, using VIM library and displayed the missing values
 missing_values <- aggr(covid_EU_2021,cex.axis=.5, prop = FALSE, numbers = TRUE)
 
 # show summary of the content of missing_values 
 summary(missing_values)
 
 
-# -----------------------------------Data Wrangling and Imputing ------------------------------------#
+# -------------------------------------------- Data Wrangling and Imputing ------------------------------------#
 
-attach(covid_EU_2021)
 # The variable `new_cases` are the counts of new confirmed cases of covid-19 reported daily, country wise. 
 # So it will not be wrong to consider the null values as no new cases in the country on particular date, 
 # hence replacing NA values with 0 for this column. 
@@ -200,7 +201,6 @@ covid_EU_2021$tests_per_case[is.na(covid_EU_2021$tests_per_case)] <- 0
 covid_EU_2021$new_vaccinations_smoothed[is.na(covid_EU_2021$new_vaccinations_smoothed)] <- 0
 covid_EU_2021$people_fully_vaccinated[is.na(covid_EU_2021$people_fully_vaccinated)] <- 0
 
-
 covid_EU_2021$aged_70_older[is.na(covid_EU_2021$aged_70_older)] <- 0
 covid_EU_2021$stringency_index[is.na(covid_EU_2021$stringency_index)] <- 0
 covid_EU_2021$diabetes_prevalence[is.na(covid_EU_2021$diabetes_prevalence)] <- 0
@@ -211,8 +211,9 @@ covid_EU_2021$life_expectancy[is.na(covid_EU_2021$life_expectancy)] <- 0
 covid_EU_2021$human_development_index[is.na(covid_EU_2021$human_development_index)] <- 0
 
 
-# Calculating the actual numbers for the variables having values 
+# Calculating the actual numbers for the categorical nominal variables having values 
 # as share of total population provided in the data set description.
+
 # Share of the population that is 70 years and older
 covid_EU_2021$aged_70_older <- (covid_EU_2021$population  *  covid_EU_2021$aged_70_older)/100
 covid_EU_2021$aged_70_older <- as.integer(covid_EU_2021$aged_70_older)
@@ -248,23 +249,14 @@ sum(is.na(covid_EU_2021))
 # Functions are primarily for multivariate analysis and scale construction using factor analysis, 
 # principal component analysis, cluster analysis and reliability analysis.
 
-#icu_patients, hosp_patients, new_tests_smoothed,
-#positive_rate, new_vaccinations_smoothed,
-#new_cases, population,
-#people_fully_vaccinated,  stringency_index, 
-#aged_70_older, diabetes_prevalence, total_smokers,
-#handwashing_facilities, life_expectancy, human_development_index
-
 covid_corr <- subset(covid_EU_2021,
-                     select = c(new_cases, population, icu_patients, hosp_patients,
-                                people_fully_vaccinated,  stringency_index, 
-                                aged_70_older, diabetes_prevalence, total_smokers,
-                                handwashing_facilities, life_expectancy, human_development_index
-                     ))
-#head(covid_corr)
-#dim(covid_corr) 
+                     select = c(iso_code, location, date, total_cases, new_cases, 
+                                total_deaths, new_deaths, people_fully_vaccinated,
+                                stringency_index, population_density, 
+                                diabetes_prevalence, handwashing_facilities, 
+                                life_expectancy, human_development_index))
 
-my_sample<- covid_corr[sample(1:nrow(covid_EU_2021), 3000, replace = FALSE),]
+my_sample<- covid_corr[sample(1:nrow(covid_EU_2021), 3500, replace = FALSE),]
 my_sample
 
 library(psych)
@@ -284,9 +276,7 @@ pairs.panels(covid_corr,
              ci = TRUE) # If TRUE, adds confidence intervals   
 
 # This chart provides a general level of detail on linearity of the independent variable with the depend
-# variables.
-# It is observed that the covid-19 total cases may be bimodal and that each of the predictor variables is skewed
-# to some extent.
+# variables. It is observed that each of the predictor variables is skewed to some extent.
 # Impact on Total/New cases with population and people_fully_vaccinated, 
 # and they fall with stringency_index levels and handwashing_facilities.
 # We can check each one in more detail using a scatter plot. 
@@ -328,9 +318,9 @@ scatter.smooth(x = covid_EU_2021$new_cases,
 # Values of -0.2 < x < 0.2 - low correlation
 cor(covid_EU_2021$new_cases, covid_EU_2021$people_fully_vaccinated) #0.6385971
 
-# Medium correlation. Value = 0.6385971.
+# High correlation. Value = 0.6385971.
 # The correlation test shows that the correlation between the new_cases and 
-# people_fully_vaccinated variables = 0.6385971 indicating a medium correlation.
+# people_fully_vaccinated variables = 0.6385971 indicating a High correlation.
 
 
 # Similarly, checking for other variables 
@@ -357,9 +347,9 @@ scatter.smooth(x = covid_EU_2021$new_cases,
 
 cor(covid_EU_2021$new_cases, covid_EU_2021$stringency_index) # -0.1706173
 
-# This variable shows a negative correlation of -0.1706173
+# This variable shows a negative low correlation of -0.1706173
 # It clearly shows that with the Government Response Stringency Index: 
-#composite measure based on 9 response indicators including school closures, 
+# composite measure based on 9 response indicators including school closures, 
 # workplace closures, and travel bans reduced the number of new cases
 
 # Similarly, examining new_cases and handwashing_facilities
@@ -368,8 +358,7 @@ scatter.smooth(x = covid_EU_2021$new_cases,
                main = "new_cases ~ handwashing_facilities",
                xlab = "new_cases",
                ylab = "handwashing_facilities")
-#summary(covid_EU_2021$handwashing_facilities)
-#table(covid_EU_2021$handwashing_facilities)
+
 cor(covid_EU_2021$new_cases, covid_EU_2021$handwashing_facilities) # -0.04546042
 
 # Similarly, examining new_cases and icu_patients
@@ -417,21 +406,6 @@ scatter.smooth(x = covid_EU_2021$new_cases,
 
 cor(covid_EU_2021$new_cases, covid_EU_2021$total_smokers) # 0.09356765
 
-# similarly, the correlation is checked between newcases and other variables
-
-cor(covid_EU_2021$new_cases, covid_EU_2021$icu_patients) # 0.1381871
-cor(covid_EU_2021$new_cases, covid_EU_2021$hosp_patients) # 0.1488507
-cor(covid_EU_2021$new_cases, covid_EU_2021$new_tests) # 0.05560787
-cor(covid_EU_2021$new_cases, covid_EU_2021$total_tests) # 0.0389979
-
-cor(covid_EU_2021$new_cases, covid_EU_2021$aged_70_older) # 0.1125412
-cor(covid_EU_2021$total_cases, covid_EU_2021$aged_70_older) # 0.13300941
-cor(covid_EU_2021$new_deaths, covid_EU_2021$aged_70_older) # 0.1312088
-cor(covid_EU_2021$total_deaths, covid_EU_2021$aged_70_older) # 0.1474991
-
-cor(covid_EU_2021$new_cases, covid_EU_2021$diabetes_prevalence) # 0.09135375
-cor(covid_EU_2021$total_cases, covid_EU_2021$diabetes_prevalence) # 0.1176815
-cor(covid_EU_2021$total_cases, covid_EU_2021$total_smokers) # 0.1241381
 
 # We can also examine all other correlations using the cor() function.
 
@@ -454,7 +428,6 @@ paste("Correlation for new_cases and life_expectancy: ", cor(covid_EU_2021$new_c
 paste("Correlation for new_cases and human_development_index: ", cor(covid_EU_2021$new_cases, covid_EU_2021$human_development_index))
 
 
-
 # "Correlation for new_cases and population:  0.935645664980254"
 # "Correlation for new_cases and people_fully_vaccinated:  0.63859714086781"
 # "Correlation for new_cases and stringency_index:  -0.170617307822532"
@@ -473,24 +446,28 @@ paste("Correlation for new_cases and human_development_index: ", cor(covid_EU_20
 # "Correlation for new_cases and human_development_index:  -0.220532299034713"
 
 
-# It appears that the variable  new_tests, total_tests  has a vary low correlation with new_cases.
+# It appears that the variable  handwashing_facilities, new_tests, total_tests  has a vary low correlation with new_cases.
 # Therefore, let's remove it from the dataset. Alternatively we can choose to exclude these dependent variables when
 # we are constructing the linear model.
 
-covid_EU_2021 <- subset(covid_EU_2021, select = -c( new_tests, total_tests))
+covid_EU_2021 <- subset(covid_EU_2021, select = -c( new_tests, total_tests ))
 head(covid_EU_2021)
 detach (covid_EU_2021)
-# ----------------------------------------------- Outliers --------------------------------------------------------------#
+
+
+# ----------------------------------------------- Outliers -------------------------------------------------#
 
 # Checking for outliers
 # Generally, any data point that lies outside the **1.5 * interquartile-range (1.5 * IQR)** is considered
 # an outlier. Examining all variables in the dataset.
+
 attach(covid_EU_2021)
 dim(covid_EU_2021)
 min(covid_EU_2021$new_cases)
 opar <- par(no.readonly = TRUE)
-par(mfrow = c(1, 2)) # divide graph area in 3 rows by 2 columns
+par(mfrow = c(2, 2)) # divide graph area in 3 rows by 2 columns
 #par<-opar
+
 
 # box plot for 'new_cases'
 boxplot(new_cases,
@@ -515,7 +492,6 @@ boxplot(stringency_index,
         main = "stringency_index",
         sub = paste("Outlier rows: ",
                     boxplot.stats(stringency_index)$out)) 
-
 # Outlier rows: 0 
 
 # box plot for 'handwashing_facilities'
@@ -555,6 +531,7 @@ boxplot(total_smokers,
         main = "total_smokers",
         sub = paste("Outlier rows: ",
                     boxplot.stats(total_smokers)$out))
+
 # box plot for 'new_tests_smoothed'
 boxplot(new_tests_smoothed,
         main = "new_tests_smoothed",
@@ -609,7 +586,6 @@ outlier_values <- boxplot.stats(covid_EU_2021$stringency_index)$out
 paste("stringency_index outliers: ", paste(outlier_values, collapse=", "))
 
 
-
 # Use boxplot.stats() function to generate relevant outliers for handwashing_facilities
 # handwashing_facilities outliers: Too many, cannot remove all
 outlier_values <- boxplot.stats(covid_EU_2021$handwashing_facilities)$out 
@@ -652,7 +628,6 @@ outlier_values <- boxplot.stats(covid_EU_2021$new_tests_smoothed)$out
 paste("new_tests_smoothed outliers: ", paste(outlier_values, collapse=", "))
 
 
-
 # Use boxplot.stats() function to generate relevant outliers for new_vaccinations_smoothed
 # new_vaccinations_smoothed outliers: Too many, cannot remove all
 outlier_values <- boxplot.stats(covid_EU_2021$new_vaccinations_smoothed)$out 
@@ -663,7 +638,6 @@ paste("new_vaccinations_smoothed outliers: ", paste(outlier_values, collapse=", 
 # life_expectancy outliers: Too many, cannot remove all
 outlier_values <- boxplot.stats(covid_EU_2021$life_expectancy)$out 
 paste("life_expectancy outliers: ", paste(outlier_values, collapse=", "))
-
 
 
 # Use boxplot.stats() function to generate relevant outliers for human_development_index
@@ -1086,7 +1060,7 @@ BIC(fit) #14170.69
 # Model summary : Output from the confint() function.
 confint(fit)
 
-#---------------------------------------------------------- Regression diagnostics -----------------------------#
+#---------------------------------------------------------- Regression diagnostics --------------------------------#
 #-------------------------------------------- Normality and studentized residuals ----------------------------------#
 # use methods available through the car package to do this analysis.
 str(covid_EU_2021)
@@ -1094,11 +1068,11 @@ library(car)
 qqPlot(fit, labels=row.names(covid_EU_2021), id.method="identify", 
        simulate=TRUE, main="Q-Q Plot")
 
-# 37256 37258  
-#  207   755
+# 25980 25978 
+# 1419  3320
 
-training_data[207,]
-training_data[755,]
+training_data[1419,]
+training_data[3320,]
 
 # The fitted() function extracts fitted values from objects returned by modeling functions. 
 # It returns the predicted new cases rate for a particular state.
@@ -1107,15 +1081,15 @@ fitted(fit)[207]   # 45051 611.1062
 fitted(fit)[755]  # 50045  966.5526
 
 dim(covid_EU_2021)
-# Remove diabetes_prevalence  outliers
+# Remove  outliers
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$location != "Ireland "
-                        & covid_EU_2021$date != "2021-01-04")
+                        covid_EU_2021$location != "Europe  "
+                        & covid_EU_2021$date != "2021-01-07")
 covid_EU_2021 <- subset(covid_EU_2021,
-                        covid_EU_2021$location != "Ireland "
-                        & covid_EU_2021$date != "2021-01-06")
+                        covid_EU_2021$location != "Europe  "
+                        & covid_EU_2021$date != "2021-01-05")
 
-#Split the data into Training and testing datasets
+#Split the data into Training and testing datasets again
 set.seed(1)
 no_rows_data <- nrow(covid_EU_2021)
 sample <- sample(1:no_rows_data, size = round(0.7 * no_rows_data), replace = FALSE)
