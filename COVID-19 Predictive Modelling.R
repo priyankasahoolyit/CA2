@@ -1086,8 +1086,8 @@ BIC(fit) #14170.69
 # Model summary : Output from the confint() function.
 confint(fit)
 
-#-------------------------------- Regression diagnostics -----------------------------#
-# Normality and studentized residuals
+#---------------------------------------------------------- Regression diagnostics -----------------------------#
+#-------------------------------------------- Normality and studentized residuals ----------------------------------#
 # use methods available through the car package to do this analysis.
 str(covid_EU_2021)
 library(car)
@@ -1148,10 +1148,10 @@ legend("topright", legend = c( "Normal Curve", "Kernel Density Curve"), lty=1:2,
 # the Bonferroni adjusted p-value for the largest absolute studentized residual:
 
 
-#Linearity
+#--------------------------------------------------- Linearity ------------------------------------------------------------#
 crPlots(fit)
 
-# Influential observations
+#--------------------------------------------- Influential observations ---------------------------------------------------#
 
 cutoff <- 4/(nrow(training_data) - length(fit$coefficients) - 2)
 plot(fit, which = 4, cook.levels = cutoff)
@@ -1161,13 +1161,13 @@ abline(h = cutoff, lty = 2, col = "red")
 avPlots(fit, ask=FALSE)
 
 
-# Influence plot
+#----------------------------------------------- Influence plot -----------------------------------------------------------#
 
 #library(car)
 influencePlot(fit, main="Influence Plot",
               sub="Circle size is proportional to Cook's distance")
 
-# Homoscedasticity
+#------------------------------------------------ Homoscedasticity ---------------------------------------------------------#
 ncvTest(fit)
 
 # Non-constant Variance Score Test 
@@ -1183,7 +1183,10 @@ spreadLevelPlot(fit)
 # Suggested power transformation:  0.007314462 
 
 
-# Global validation of linear model assumption
+#------------------------------------------ Global validation of linear model assumption ----------------------------------------#
+
+# The gvlma() function performs a global validation of linear model assumptions as well as
+# separate evaluations of skewness, kurtosis, and heteroscedasticity
 
 library(gvlma)
 gvmodel <- gvlma(fit)
@@ -1196,7 +1199,7 @@ summary(gvmodel)
 #Link Function         11.857 0.0005744 Assumptions NOT satisfied!
 #Heteroscedasticity     2.972 0.0846948    Assumptions acceptable.
 
-# Multicollinearity
+#------------------------------------------------ Multicollinearity -------------------------------------------#
 
 library(car)
 vif(fit)
@@ -1221,16 +1224,16 @@ sqrt(vif(fit)) > 2
 #total_smokers 
 #TRUE 
 
-# Transforming variables
+#------------------------------------------------ Transforming variables -------------------------------------------#
 
-#library(car)
+library(car)
 summary(powerTransform(training_data$new_cases))
-summary(powerTransform(training_data$population))
 
 
-# Comparing models using AIC
+#--------------------------------------------- Comparing models using AIC ------------------------------------------#
 
-#Transform Murder variable as indicated by spreadLevelPlot() function
+# Transform new_cases variable as indicated by spreadLevelPlot() function
+
 sqrt_transform_new_cases <- sqrt(training_data$new_cases)
 training_data$new_cases_sqrt <- sqrt_transform_new_cases
 training_data$new_cases_sqrt
@@ -1241,21 +1244,25 @@ fit_model1 <- lm(new_cases ~ people_fully_vaccinated + population +
                      diabetes_prevalence + total_smokers+
                      new_tests_smoothed + new_vaccinations_smoothed +
                      life_expectancy + human_development_index, data=training_data)
+
+
 fit_model2 <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
                      stringency_index + handwashing_facilities + 
                      icu_patients + hosp_patients + aged_70_older +  
                      diabetes_prevalence + total_smokers+
                      new_tests_smoothed + new_vaccinations_smoothed +
                      life_expectancy + human_development_index, data=training_data)
+
 AIC(fit_model1,fit_model2)
 
 
-spreadLevelPlot(fit_model1) # Suggested power transformation:  0.3055092 
-spreadLevelPlot(fit_model2) # Suggested power transformation:  0.4451431 
+spreadLevelPlot(fit_model1) # Suggested power transformation:  0.007314462 
+spreadLevelPlot(fit_model2) # Suggested power transformation:  0.2768732 
 
 
-# Comparing multiple models
+#-------------------------------------------- Comparing multiple models ----------------------------------------------#
 # STEPWISE REGRESSION
+# Backward
 
 library(MASS)
 fit_test <- lm(new_cases ~ people_fully_vaccinated + population + 
@@ -1266,6 +1273,7 @@ fit_test <- lm(new_cases ~ people_fully_vaccinated + population +
 stepAIC(fit_test, direction="backward")
 
 
+# SUBSETS REGRESSION
 library(leaps)
 leaps <-regsubsets(new_cases ~ people_fully_vaccinated + population + 
                        stringency_index + handwashing_facilities + 
@@ -1275,6 +1283,11 @@ leaps <-regsubsets(new_cases ~ people_fully_vaccinated + population +
 plot(leaps, scale="adjr2")
 
 
+
+
+# STEPWISE REGRESSION on transformed response variable
+# Backward
+
 #library(MASS)
 fit_test <- lm(new_cases_sqrt ~ people_fully_vaccinated + population + 
                    stringency_index + handwashing_facilities + 
@@ -1283,7 +1296,7 @@ fit_test <- lm(new_cases_sqrt ~ people_fully_vaccinated + population +
                    life_expectancy + human_development_index, data=training_data)
 stepAIC(fit_test, direction="backward")
 
-
+# SUBSETS REGRESSION on transformed response variable
 #library(leaps)
 leaps <-regsubsets(new_cases_sqrt ~ people_fully_vaccinated + population + 
                        stringency_index + handwashing_facilities + 
@@ -1294,7 +1307,7 @@ leaps <-regsubsets(new_cases_sqrt ~ people_fully_vaccinated + population +
 plot(leaps, scale="adjr2")
 
 
-# Lets examine predicted accuracy.
+#---------------------------------------------------- Examining Predicted Accuracy ---------------------------------#
 
 fit_model <- lm(new_cases ~ people_fully_vaccinated + population + 
                     stringency_index + handwashing_facilities + 
@@ -1348,15 +1361,16 @@ min_max_accuracy
 
 # 0.5961353
 
-# Residual Standard Error (RSE), or sigma
+#----------------------------------------- Residual Standard Error (RSE), or sigma --------------------------------------#
 
 sigma(fit_model)/ mean(testing_data$new_cases)
-# 0.7605372
+# 0.6511408
+# This estimates the error of 65% on the existing data set.
 
 
 sigma(fit_model_sqrt)/ mean(testing_data$new_cases)
-# 0.01237564
-# This estimates an error rate of 4% with the data we have at hand.
+# 0.01186012
+# This estimates an error rate of 1% with the data we have at hand.
 
 #-------------------------------------- Executing final model with varied inputs ----------------------------------------#
 detach (covid_EU_2021)
@@ -1365,19 +1379,6 @@ attach (covid_EU_2021)
 
 # Checking the ranges in input data bu using Summary function
 summary(covid_EU_2021)
-# 2069.37 
-
-df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
-                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
-                 icu_patients = c(42.17), hosp_patients = c(601.6),
-                 new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
-                 aged_70_older = c(226878), diabetes_prevalence = c(135926),
-                 total_smokers = c(1199276), life_expectancy = c(79.37),
-                 human_development_index = c(0.8669))
-predicted_new_cases <- predict(fit_model_sqrt, df)
-predicted_new_cases
-
-# 16.68512 
 
 df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
                  stringency_index = c(88.89), handwashing_facilities = c(6649383),
@@ -1389,8 +1390,21 @@ df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055),
 predicted_new_cases <- predict(fit_model, df)
 predicted_new_cases
 
-# 593.4031
+df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
+                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
+                 icu_patients = c(42.17), hosp_patients = c(601.6),
+                 new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
+                 aged_70_older = c(226878), diabetes_prevalence = c(135926),
+                 total_smokers = c(1199276), life_expectancy = c(79.37),
+                 human_development_index = c(0.8669))
+predicted_new_cases <- predict(fit_model_sqrt, df)
+predicted_new_cases^2
 
+# 16.68512 
+
+
+
+# 593.4031
 
 df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
                  stringency_index = c(88.89), handwashing_facilities = c(6649383),
@@ -1404,4 +1418,14 @@ predicted_new_cases
 
 # 29.63811
 
+
+df <- data.frame(people_fully_vaccinated = c(41397), population = c(3921055), 
+                 stringency_index = c(88.89), handwashing_facilities = c(6649383),
+                 icu_patients = c(42.17), hosp_patients = c(601.6),
+                 new_tests_smoothed = c(5142), new_vaccinations_smoothed = c(2594),
+                 aged_70_older = c(226878), diabetes_prevalence = c(135926),
+                 total_smokers = c(1199276), life_expectancy = c(79.37),
+                 human_development_index = c(0.8669))
+predicted_new_cases <- predict(fit_model_sqrt, df)
+predicted_new_cases
 #---------------------------------------------------------- The End -------------------------------------------------#
